@@ -6,14 +6,13 @@ import sys
 import os
 from datetime import datetime
 
-ssl._create_default_https_context = ssl._create_unverified_context 
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # ============================================================
 # CONFIG — loaded from .env + topic JSON
 # ============================================================
 
 def _load_env(path=".env"):
-    """Load key=value pairs from a .env file into os.environ."""
     try:
         with open(path) as f:
             for line in f:
@@ -34,7 +33,6 @@ OLLAMA_MODEL       = os.environ.get("OLLAMA_MODEL", "qwen3-coder:30b")
 
 
 def load_topic_config(topic_arg):
-    """Load a topic JSON config. Accepts a name (robotics) or a path."""
     if os.path.isfile(topic_arg):
         path = topic_arg
     else:
@@ -49,12 +47,100 @@ def load_topic_config(topic_arg):
 
 
 # ============================================================
-# SEARCH
+# LOGGING
 # ============================================================
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
+
+# ============================================================
+# DELIVERY
+# ============================================================
+
+class Delivery:
+    """Base class for briefing delivery destinations."""
+
+    def send(self, message):
+        raise NotImplementedError
+
+    def send_long(self, message):
+        """Send a message that may exceed the destination's size limit.
+        Default: single send. Override if chunking is needed."""
+        self.send(message)
+
+
+class TelegramDelivery(Delivery):
+    MAX_CHARS = 4000
+
+    def __init__(self, token, chat_id):
+        self.token   = token
+        self.chat_id = chat_id
+
+    def send(self, message):
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        payload = json.dumps({
+            "chat_id": self.chat_id, "text": message,
+            "parse_mode": "HTML", "disable_web_page_preview": True
+        }).encode("utf-8")
+        try:
+            req = urllib.request.Request(url, data=payload)
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode())
+                if result.get("ok"):
+                    log("  ✅ Telegram: sent")
+                    return True
+                log(f"  ❌ Telegram error: {result}")
+                return False
+        except Exception as e:
+            log(f"  ❌ Telegram send failed: {e}")
+            return False
+
+    def send_long(self, message):
+        if len(message) <= self.MAX_CHARS:
+            return self.send(message)
+        chunks = message.split("\n\n")
+        current = ""
+        for chunk in chunks:
+            if len(current) + len(chunk) + 2 > self.MAX_CHARS:
+                if current:
+                    self.send(current)
+                current = chunk
+            else:
+                current = current + "\n\n" + chunk if current else chunk
+        if current:
+            self.send(current)
+
+
+class ConsoleDelivery(Delivery):
+    """Prints to stdout — used for --dry-run."""
+
+    def send(self, message):
+        print(message)
+
+
+# Registry: name -> factory function
+# To add a new destination, add an entry here and implement the class above.
+DELIVERY_REGISTRY = {
+    "telegram": lambda: TelegramDelivery(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID),
+    "console":  lambda: ConsoleDelivery(),
+}
+
+
+def get_delivery(dry_run):
+    if dry_run:
+        return ConsoleDelivery()
+    dest = os.environ.get("BRIEFING_DEST", "telegram")
+    if dest not in DELIVERY_REGISTRY:
+        log(f"❌ Unknown delivery destination: {dest}. Choose from: {', '.join(DELIVERY_REGISTRY)}")
+        sys.exit(1)
+    return DELIVERY_REGISTRY[dest]()
+
+
+# ============================================================
+# SEARCH
+# ============================================================
 
 def search_searxng(query, count=5, category="news"):
     params = urllib.parse.urlencode({
@@ -106,9 +192,8 @@ def fetch_all_results(searches):
 def find_recent_narratives(topic, lookback_minutes):
     """Return list of (folder, meta, narrative_text) for recent non-redundant runs.
 
-    Walks output/ newest-first within the lookback window.  Stops as soon as it
-    hits a run that already aggregated its own predecessors — no need to look
-    further back than that.
+    Walks output/ newest-first within the lookback window. Stops as soon as it
+    hits a run that already aggregated its own predecessors.
     """
     output_dir = "output"
     if not os.path.isdir(output_dir):
@@ -118,7 +203,7 @@ def find_recent_narratives(topic, lookback_minutes):
     found = []
 
     for name in sorted(os.listdir(output_dir), reverse=True):
-        folder = os.path.join(output_dir, name)
+        folder         = os.path.join(output_dir, name)
         meta_path      = os.path.join(folder, "meta.json")
         narrative_path = os.path.join(folder, "narrative.txt")
 
@@ -140,9 +225,8 @@ def find_recent_narratives(topic, lookback_minutes):
 
         found.append((folder, meta, text))
 
-        # This run already pulled in its predecessors — stop here
         if meta.get("aggregated_from"):
-            break
+            break  # this run already pulled in predecessors — stop here
 
     return list(reversed(found))  # chronological order
 
@@ -229,47 +313,6 @@ Write the narrative now:"""
 
 
 # ============================================================
-# TELEGRAM
-# ============================================================
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID, "text": message,
-        "parse_mode": "HTML", "disable_web_page_preview": True
-    }).encode("utf-8")
-    try:
-        req = urllib.request.Request(url, data=payload)
-        req.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-            if result.get("ok"):
-                log("  ✅ Telegram: sent")
-                return True
-            log(f"  ❌ Telegram error: {result}")
-            return False
-    except Exception as e:
-        log(f"  ❌ Telegram send failed: {e}")
-        return False
-
-
-def send_long_message(message):
-    if len(message) <= 4000:
-        return send_telegram(message)
-    chunks = message.split("\n\n")
-    current = ""
-    for chunk in chunks:
-        if len(current) + len(chunk) + 2 > 4000:
-            if current:
-                send_telegram(current)
-            current = chunk
-        else:
-            current = current + "\n\n" + chunk if current else chunk
-    if current:
-        send_telegram(current)
-
-
-# ============================================================
 # FORMAT
 # ============================================================
 
@@ -318,11 +361,10 @@ def build_narrative_message(narrative, cfg):
 
 
 # ============================================================
-# MAIN
+# MOCK
 # ============================================================
 
 def mock_fetch_results(searches):
-    """Fake search results — no SearXNG needed."""
     results = []
     for s in searches:
         results.append({
@@ -342,16 +384,19 @@ def mock_fetch_results(searches):
 
 
 def mock_narrative(cfg):
-    """Fake AI narrative — no Ollama needed."""
     return (
         f"[MOCK NARRATIVE] This is a test narrative for {cfg['ai_topic']}. "
         "In a real run, Ollama would generate several paragraphs of analysis here. "
-        "The formatting, Telegram delivery, and message splitting are all exercised in mock mode.\n\n"
+        "The formatting, delivery, and message splitting are all exercised in mock mode.\n\n"
         "A second paragraph would discuss trends and key players. "
         "This confirms the full pipeline is working end-to-end on your laptop.\n\n"
         "Watch for real data when you run this on the Mac Mini."
     )
 
+
+# ============================================================
+# SAVE
+# ============================================================
 
 def save_results(topic, raw_briefing, narrative, cfg, aggregated_from=None):
     now = datetime.now()
@@ -373,13 +418,16 @@ def save_results(topic, raw_briefing, narrative, cfg, aggregated_from=None):
     log(f"  💾 Saved to {folder}/")
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
     raw_args = sys.argv[1:]
     mock    = "--mock"    in raw_args
     dry_run = "--dry-run" in raw_args
     save    = "--save"    in raw_args
 
-    # --lookback N  (minutes); falls back to config default then 0
     lookback = 0
     for i, a in enumerate(raw_args):
         if a == "--lookback" and i + 1 < len(raw_args):
@@ -405,28 +453,31 @@ def main():
         available = [f[:-5] for f in os.listdir("config") if f.endswith(".json")]
         print("Usage: python briefing.py <topic> [--mock] [--dry-run] [--save] [--lookback N]")
         print("  --mock        fake SearXNG + Ollama (no services needed)")
-        print("  --dry-run     also skip Telegram (print to terminal only)")
+        print("  --dry-run     skip delivery, print to terminal instead")
         print("  --save        write results to output/<timestamp>_<topic>/")
         print("  --lookback N  include last N minutes of saved summaries as AI context")
         print(f"Available topics: {', '.join(sorted(available))}")
+        print(f"Delivery destinations: {', '.join(DELIVERY_REGISTRY)} (set BRIEFING_DEST in .env)")
         sys.exit(1)
 
     topic = args[0]
-    cfg = load_topic_config(topic)
+    cfg   = load_topic_config(topic)
 
-    # Config-level default for lookback (overridden by --lookback flag)
     if lookback == 0:
         lookback = cfg.get("lookback_minutes", 0)
 
+    delivery = get_delivery(dry_run)
+    dest_name = "console" if dry_run else os.environ.get("BRIEFING_DEST", "telegram")
+
     log("=" * 40)
     log(cfg["title"]
-        + (" [MOCK]"    if mock    else "")
-        + (" [DRY-RUN]" if dry_run else "")
-        + (" [SAVE]"    if save    else "")
+        + (" [MOCK]"          if mock              else "")
+        + (f" [{dest_name.upper()}]")
+        + (" [SAVE]"          if save              else "")
         + (f" [LOOKBACK {lookback}m]" if lookback and save else ""))
     log("=" * 40)
 
-    if not dry_run and not mock and TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    if not dry_run and not mock and dest_name == "telegram" and TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         log("❌ Set TELEGRAM_BOT_TOKEN in .env")
         sys.exit(1)
 
@@ -434,7 +485,6 @@ def main():
         log("⚠  Mock mode — skipping SearXNG and Ollama")
         ollama_available = True
     else:
-        # Check SearXNG
         try:
             req = urllib.request.Request(f"{SEARXNG_URL}/search?q=test&format=json")
             req.add_header("User-Agent", "DailyBriefing/1.0")
@@ -444,7 +494,6 @@ def main():
             log("❌ SearXNG not reachable")
             sys.exit(1)
 
-        # Check Ollama
         try:
             urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5)
             log("✅ Ollama: OK")
@@ -455,7 +504,6 @@ def main():
 
     log("")
 
-    # Look up previous summaries for aggregation
     previous_narratives = []
     if lookback and save:
         previous_narratives = find_recent_narratives(topic, lookback)
@@ -472,10 +520,7 @@ def main():
     log("📨 Sending raw briefing...")
     raw_briefing = build_raw_briefing(results_data, cfg)
     log(f"  Raw briefing: {len(raw_briefing)} chars")
-    if dry_run:
-        print(raw_briefing)
-    else:
-        send_long_message(raw_briefing)
+    delivery.send_long(raw_briefing)
     log("")
 
     log("🧠 Generating AI narrative...")
@@ -489,10 +534,7 @@ def main():
     if narrative:
         story = build_narrative_message(narrative, cfg)
         log("📨 Sending AI story...")
-        if dry_run:
-            print(story)
-        else:
-            send_long_message(story)
+        delivery.send_long(story)
     else:
         log("⚠ Skipping AI narrative")
 
