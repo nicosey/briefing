@@ -11,6 +11,7 @@
     {"emoji": "💷", "title": "GILTS & FIXED INCOME",    "query": "UK gilts bond market Bank of England interest rates yields",                                   "count": 4, "category": "news"},
     {"emoji": "🏢", "title": "M&A & CORPORATE",         "query": "UK mergers acquisitions IPO London Stock Exchange takeover",                                   "count": 4, "category": "news"},
     {"emoji": "🌍", "title": "MACRO & STERLING",        "query": "UK economy GDP inflation sterling pound dollar macro outlook",                                  "count": 3, "category": "news"},
-    {"emoji": "🏦", "title": "BANKS & ASSET MANAGERS",  "query": "Barclays HSBC Lloyds NatWest Schroders abrdn Legal General capital markets results",          "count": 4, "category": "news"}
+    {"emoji": "🏦", "title": "BANKS & ASSET MANAGERS",  "query": "Barclays HSBC Lloyds NatWest Schroders abrdn Legal General capital markets results",          "count": 4, "category": "news"},
+    {"emoji": "₿",  "title": "CRYPTO & DIGITAL ASSETS", "query": "bitcoin cryptocurrency UK FCA digital assets regulation institutional crypto London",             "count": 4, "category": "news"}
   ]
 }
