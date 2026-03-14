@@ -1,0 +1,15 @@
+{
+  "title": "Daily Robotics Briefing",
+  "header_emoji": "📋",
+  "footer_emoji": "🦞",
+  "ai_persona": "a robotics industry analyst writing a daily morning briefing",
+  "ai_topic": "Today's Robot News",
+  "lookback_minutes": 120,
+  "searches": [
+    {"emoji": "🤖", "title": "ROBOTICS NEWS",        "query": "robotics industry news",                                                                                           "count": 5, "category": "news"},
+    {"emoji": "🏭", "title": "DEPLOYMENTS & RaaS",   "query": "robot deployment warehouse factory automation RaaS",                                                               "count": 4, "category": "news"},
+    {"emoji": "🔬", "title": "COMPETITOR WATCH",     "query": "Boston Dynamics OR Figure AI OR Agility Robotics OR Sanctuary AI OR Apptronik OR Serve Robotics OR Locus Robotics","count": 5, "category": "news"},
+    {"emoji": "💰", "title": "FUNDING & ACQUISITIONS","query": "robotics startup funding acquisition investment series",                                                           "count": 4, "category": "news"},
+    {"emoji": "🧠", "title": "AI + ROBOTICS",        "query": "artificial intelligence robotics embodied AI humanoid",                                                             "count": 3, "category": "news"}
+  ]
+}

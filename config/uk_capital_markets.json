@@ -1,0 +1,16 @@
+{
+  "title": "Daily UK Capital Markets Briefing",
+  "header_emoji": "🏦",
+  "footer_emoji": "🇬🇧",
+  "ai_persona": "a senior UK capital markets analyst writing a daily morning briefing for institutional clients",
+  "ai_topic": "Today's UK Capital Markets Digest",
+  "lookback_minutes": 120,
+  "searches": [
+    {"emoji": "📈", "title": "MARKETS & INDICES",       "query": "FTSE 100 FTSE 250 UK stock market today",                                                    "count": 5, "category": "news"},
+    {"emoji": "🏛️", "title": "REGULATORY & FCA",        "query": "FCA regulation UK financial markets LSE rules 2025",                                          "count": 4, "category": "news"},
+    {"emoji": "💷", "title": "GILTS & FIXED INCOME",    "query": "UK gilts bond market Bank of England interest rates yields",                                   "count": 4, "category": "news"},
+    {"emoji": "🏢", "title": "M&A & CORPORATE",         "query": "UK mergers acquisitions IPO London Stock Exchange takeover",                                   "count": 4, "category": "news"},
+    {"emoji": "🌍", "title": "MACRO & STERLING",        "query": "UK economy GDP inflation sterling pound dollar macro outlook",                                  "count": 3, "category": "news"},
+    {"emoji": "🏦", "title": "BANKS & ASSET MANAGERS",  "query": "Barclays HSBC Lloyds NatWest Schroders abrdn Legal General capital markets results",          "count": 4, "category": "news"}
+  ]
+}

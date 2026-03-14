@@ -1,0 +1,16 @@
+{
+  "title": "Daily Data Centre Briefing",
+  "header_emoji": "🖥️",
+  "footer_emoji": "⚡",
+  "ai_persona": "a data centre industry analyst writing a daily morning briefing for operators and investors",
+  "ai_topic": "Today's Data Centre News",
+  "lookback_minutes": 120,
+  "searches": [
+    {"emoji": "🏗️", "title": "NEW BUILDS & EXPANSIONS",  "query": "data centre new build campus expansion hyperscale 2025",                                                         "count": 5, "category": "news"},
+    {"emoji": "⚡", "title": "POWER & ENERGY",            "query": "data centre power energy consumption grid connection electricity nuclear",                                       "count": 4, "category": "news"},
+    {"emoji": "🤖", "title": "AI INFRASTRUCTURE",         "query": "AI data centre GPU cluster inference training Microsoft Google Amazon Meta",                                     "count": 5, "category": "news"},
+    {"emoji": "💰", "title": "INVESTMENT & DEALS",        "query": "data centre REIT acquisition investment colocation funding deal 2025",                                          "count": 4, "category": "news"},
+    {"emoji": "🇬🇧", "title": "UK & EUROPE",             "query": "UK Europe data centre planning permission London Frankfurt Amsterdam regulation",                                "count": 4, "category": "news"},
+    {"emoji": "🌡️", "title": "COOLING & SUSTAINABILITY", "query": "data centre cooling liquid immersion PUE sustainability carbon emissions",                                       "count": 3, "category": "news"}
+  ]
+}
