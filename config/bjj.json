@@ -1,0 +1,15 @@
+{
+  "title": "Daily BJJ Briefing",
+  "header_emoji": "🥋",
+  "footer_emoji": "🏆",
+  "ai_persona": "a Brazilian jiu-jitsu journalist writing a daily briefing for competitive grapplers and enthusiasts",
+  "ai_topic": "Today's BJJ Digest",
+  "lookback_minutes": 120,
+  "searches": [
+    {"emoji": "🏆", "title": "COMPETITION RESULTS",   "query": "BJJ jiu jitsu tournament results IBJJF ADCC competition 2025",                                    "count": 5, "category": "news"},
+    {"emoji": "⭐", "title": "ATHLETE NEWS",           "query": "Gordon Ryan Mikey Musumeci Andre Galvao Craig Jones BJJ athlete news",                            "count": 4, "category": "news"},
+    {"emoji": "🎖️", "title": "ADCC & NOGI",           "query": "ADCC no-gi submission grappling EBI Polaris WNO results",                                         "count": 4, "category": "news"},
+    {"emoji": "🏫", "title": "TEAMS & ACADEMIES",     "query": "Atos New Wave Alliance Checkmat Renzo Gracie team BJJ academy news",                              "count": 3, "category": "news"},
+    {"emoji": "📅", "title": "UPCOMING EVENTS",       "query": "BJJ jiu jitsu upcoming tournament event schedule 2025",                                            "count": 3, "category": "news"}
+  ]
+}
