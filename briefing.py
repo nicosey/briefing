@@ -1,6 +1,7 @@
 import urllib.request
 import urllib.parse
 import json
+import sqlite3
 import ssl
 import sys
 import os
@@ -30,6 +31,7 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 SEARXNG_URL        = os.environ.get("SEARXNG_URL", "http://localhost:8888")
 OLLAMA_URL         = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL       = os.environ.get("OLLAMA_MODEL", "qwen3-coder:30b")
+DB_PATH            = os.environ.get("BRIEFING_DB", os.path.join("output", "briefings.db"))
 
 
 def load_topic_config(topic_arg):
@@ -186,61 +188,82 @@ def fetch_all_results(searches):
 
 
 # ============================================================
-# HISTORY / AGGREGATION
+# DATABASE
 # ============================================================
+#
+# Schema: runs(timestamp PK, topic, raw_briefing, narrative,
+#              aggregated_from JSON, aggregated bool)
+#
+# timestamp is an ISO-format string — e.g. "2026-03-22T09:00:01"
+# It acts as a natural, human-readable primary key.
 
-def find_recent_narratives(topic, lookback_minutes):
-    """Return list of (folder, meta, narrative_text) for recent non-redundant runs.
+def init_db():
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+    con = sqlite3.connect(DB_PATH)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS runs (
+            timestamp       TEXT PRIMARY KEY,
+            topic           TEXT NOT NULL,
+            raw_briefing    TEXT,
+            narrative       TEXT,
+            aggregated_from TEXT DEFAULT '[]',
+            aggregated      INTEGER DEFAULT 0
+        )
+    """)
+    con.commit()
+    con.close()
 
-    Walks output/ newest-first within the lookback window. Stops as soon as it
-    hits a run that already aggregated its own predecessors.
+
+def db_save_run(timestamp, topic, raw_briefing, narrative, aggregated_from=None):
+    con = sqlite3.connect(DB_PATH)
+    con.execute(
+        "INSERT OR REPLACE INTO runs "
+        "(timestamp, topic, raw_briefing, narrative, aggregated_from) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (timestamp, topic, raw_briefing, narrative, json.dumps(aggregated_from or []))
+    )
+    con.commit()
+    con.close()
+    log(f"  🗄  DB: saved run {timestamp}")
+
+
+def db_find_recent_runs(topic, lookback_minutes):
+    """Return [(timestamp, narrative)] for recent runs, newest-first scan.
+
+    Stops as soon as it hits a run that already aggregated its predecessors —
+    no need to look further back than that.
+    Returns results in chronological order.
     """
-    output_dir = "output"
-    if not os.path.isdir(output_dir):
-        return []
+    cutoff = datetime.fromtimestamp(
+        datetime.now().timestamp() - lookback_minutes * 60
+    ).isoformat()
 
-    cutoff = datetime.now().timestamp() - lookback_minutes * 60
+    con = sqlite3.connect(DB_PATH)
+    rows = con.execute(
+        "SELECT timestamp, narrative, aggregated_from FROM runs "
+        "WHERE topic=? AND timestamp>=? AND narrative IS NOT NULL "
+        "ORDER BY timestamp DESC",
+        (topic, cutoff)
+    ).fetchall()
+    con.close()
+
     found = []
-
-    for name in sorted(os.listdir(output_dir), reverse=True):
-        folder         = os.path.join(output_dir, name)
-        meta_path      = os.path.join(folder, "meta.json")
-        narrative_path = os.path.join(folder, "narrative.txt")
-
-        if not os.path.isfile(meta_path) or not os.path.isfile(narrative_path):
-            continue
-
-        with open(meta_path) as f:
-            meta = json.load(f)
-
-        if meta.get("topic") != topic:
-            continue
-
-        ts = datetime.fromisoformat(meta["timestamp"]).timestamp()
-        if ts < cutoff:
-            break  # sorted newest-first; nothing older will qualify
-
-        with open(narrative_path) as f:
-            text = f.read()
-
-        found.append((folder, meta, text))
-
-        if meta.get("aggregated_from"):
-            break  # this run already pulled in predecessors — stop here
+    for ts, narrative, agg_from in rows:
+        found.append((ts, narrative))
+        if json.loads(agg_from):   # this run already pulled in predecessors
+            break
 
     return list(reversed(found))  # chronological order
 
 
-def mark_aggregated(folders):
-    for folder in folders:
-        meta_path = os.path.join(folder, "meta.json")
-        if not os.path.isfile(meta_path):
-            continue
-        with open(meta_path) as f:
-            meta = json.load(f)
-        meta["aggregated"] = True
-        with open(meta_path, "w") as f:
-            json.dump(meta, f, indent=2)
+def db_mark_aggregated(timestamps):
+    con = sqlite3.connect(DB_PATH)
+    con.executemany(
+        "UPDATE runs SET aggregated=1 WHERE timestamp=?",
+        [(ts,) for ts in timestamps]
+    )
+    con.commit()
+    con.close()
 
 
 # ============================================================
@@ -260,9 +283,8 @@ def generate_narrative(results_data, cfg, previous_narratives=None):
     history_block = ""
     if previous_narratives:
         history_block = "\nPREVIOUS SUMMARIES (for context and trend continuity):\n"
-        for folder, meta, text in previous_narratives:
-            ts = meta.get("timestamp", "earlier")[:16].replace("T", " ")
-            history_block += f"\n[{ts}]\n{text}\n"
+        for ts, text in previous_narratives:
+            history_block += f"\n[{ts[:16].replace('T', ' ')}]\n{text}\n"
         history_block += "\n---\n"
 
     agg_instruction = (
@@ -398,24 +420,21 @@ def mock_narrative(cfg):
 # SAVE
 # ============================================================
 
-def save_results(topic, raw_briefing, narrative, cfg, aggregated_from=None):
-    now = datetime.now()
-    folder = os.path.join("output", f"{now.strftime('%Y-%m-%d_%H-%M-%S')}_{topic}")
+def save_results(timestamp, topic, raw_briefing, narrative, cfg, aggregated_from=None):
+    # — DB (primary) —
+    agg_timestamps = [ts for ts, _ in (aggregated_from or [])]
+    db_save_run(timestamp, topic, raw_briefing, narrative, aggregated_from=agg_timestamps)
+
+    # — Files (human-readable archive) —
+    safe_ts = timestamp.replace(":", "-").replace("T", "_")
+    folder  = os.path.join("output", f"{safe_ts}_{topic}")
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, "raw_briefing.txt"), "w") as f:
         f.write(raw_briefing)
     if narrative:
         with open(os.path.join(folder, "narrative.txt"), "w") as f:
             f.write(build_narrative_message(narrative, cfg))
-    meta = {
-        "topic": topic,
-        "timestamp": now.isoformat(),
-        "aggregated_from": [os.path.basename(f) for f, _, _ in (aggregated_from or [])],
-        "aggregated": False,
-    }
-    with open(os.path.join(folder, "meta.json"), "w") as f:
-        json.dump(meta, f, indent=2)
-    log(f"  💾 Saved to {folder}/")
+    log(f"  💾 Files: {folder}/")
 
 
 # ============================================================
@@ -504,9 +523,12 @@ def main():
 
     log("")
 
+    if save:
+        init_db()
+
     previous_narratives = []
     if lookback and save:
-        previous_narratives = find_recent_narratives(topic, lookback)
+        previous_narratives = db_find_recent_runs(topic, lookback)
         if previous_narratives:
             log(f"📚 Found {len(previous_narratives)} previous summary(s) to aggregate")
         else:
@@ -540,9 +562,11 @@ def main():
 
     if save:
         log("💾 Saving results...")
-        save_results(topic, raw_briefing, narrative, cfg, aggregated_from=previous_narratives or None)
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        save_results(timestamp, topic, raw_briefing, narrative, cfg,
+                     aggregated_from=previous_narratives or None)
         if previous_narratives:
-            mark_aggregated([f for f, _, _ in previous_narratives])
+            db_mark_aggregated([ts for ts, _ in previous_narratives])
             log(f"  ✅ Marked {len(previous_narratives)} previous run(s) as aggregated")
 
     log("")
