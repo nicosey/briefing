@@ -5,6 +5,10 @@
   "ai_persona": "a senior UK capital markets analyst writing a daily morning briefing for institutional clients",
   "ai_topic": "Today's UK Capital Markets Digest",
   "lookback_minutes": 120,
+  "outputs": [
+    {"type": "narrative", "name": "Daily Digest",   "max_words": 500},
+    {"type": "tweet",     "name": "Tweet Summary",  "max_chars": 280}
+  ],
   "searches": [
     {"emoji": "📈", "title": "MARKETS & INDICES",       "query": "FTSE 100 FTSE 250 UK stock market today",                                                    "count": 5, "category": "news"},
     {"emoji": "🏛️", "title": "REGULATORY & FCA",        "query": "FCA regulation UK financial markets LSE rules 2025",                                          "count": 4, "category": "news"},

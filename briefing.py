@@ -10,25 +10,36 @@ from config import (
     TELEGRAM_BOT_TOKEN, SEARXNG_URL, OLLAMA_URL,
     log, load_topic_config
 )
-from db        import init_db, save_run, find_recent_runs, mark_aggregated
+from db        import init_db, save_run, save_output, find_recent_runs, mark_aggregated
 from delivery  import get_delivery, REGISTRY as DELIVERY_REGISTRY
 from search    import fetch_all_results, mock_fetch_results
-from ai        import generate_narrative, mock_narrative
-from format    import build_raw_briefing, build_narrative_message
+from ai        import generate_output, mock_output
+from format    import build_raw_briefing, build_output_message
 
 
-def save_results(timestamp, topic, raw_briefing, narrative, cfg, aggregated_from=None):
+def save_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg, aggregated_from=None):
     agg_timestamps = [ts for ts, _ in (aggregated_from or [])]
-    save_run(timestamp, topic, raw_briefing, narrative, aggregated_from=agg_timestamps)
+    save_run(timestamp, topic, raw_briefing, aggregated_from=agg_timestamps)
 
+    for output_cfg in outputs_cfg:
+        output_type = output_cfg["type"]
+        name        = output_cfg.get("name", output_type)
+        content     = generated_outputs.get(output_type)
+        if content:
+            save_output(timestamp, output_type, name, content)
+
+    # write files
     safe_ts = timestamp.replace(":", "-").replace("T", "_")
     folder  = os.path.join("output", f"{safe_ts}_{topic}")
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, "raw_briefing.txt"), "w") as f:
         f.write(raw_briefing)
-    if narrative:
-        with open(os.path.join(folder, "narrative.txt"), "w") as f:
-            f.write(build_narrative_message(narrative, cfg))
+    for output_cfg in outputs_cfg:
+        output_type = output_cfg["type"]
+        content     = generated_outputs.get(output_type)
+        if content:
+            with open(os.path.join(folder, f"{output_type}.txt"), "w") as f:
+                f.write(build_output_message(content, output_cfg, cfg))
     log(f"  💾 Files: {folder}/")
 
 
@@ -76,15 +87,20 @@ def main():
     if lookback == 0:
         lookback = cfg.get("lookback_minutes", 0)
 
+    # Default to narrative-only if config has no outputs defined
+    outputs_cfg = cfg.get("outputs", [
+        {"type": "narrative", "name": cfg.get("ai_topic", "Daily Digest")}
+    ])
+
     delivery  = get_delivery(dry_run)
     dest_name = "console" if dry_run else os.environ.get("BRIEFING_DEST", "telegram")
 
     log("=" * 40)
     log(cfg["title"]
-        + (" [MOCK]"              if mock           else "")
+        + (" [MOCK]"                   if mock              else "")
         + (f" [{dest_name.upper()}]")
-        + (" [SAVE]"              if save           else "")
-        + (f" [LOOKBACK {lookback}m]" if lookback and save else ""))
+        + (" [SAVE]"                   if save              else "")
+        + (f" [LOOKBACK {lookback}m]"  if lookback and save else ""))
     log("=" * 40)
 
     if not dry_run and not mock and dest_name == "telegram" and TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
@@ -109,7 +125,7 @@ def main():
             log("✅ Ollama: OK")
             ollama_available = True
         except Exception:
-            log("⚠ Ollama not reachable — will skip AI narrative")
+            log("⚠ Ollama not reachable — will skip AI outputs")
             ollama_available = False
 
     log("")
@@ -136,25 +152,34 @@ def main():
     delivery.send_long(raw_briefing)
     log("")
 
-    log("🧠 Generating AI narrative...")
-    if mock:
-        narrative = mock_narrative(cfg)
-    elif ollama_available:
-        narrative = generate_narrative(results_data, cfg, previous_narratives or None)
-    else:
-        narrative = None
+    generated_outputs = {}
 
-    if narrative:
-        story = build_narrative_message(narrative, cfg)
-        log("📨 Sending AI story...")
-        delivery.send_long(story)
-    else:
-        log("⚠ Skipping AI narrative")
+    for output_cfg in outputs_cfg:
+        output_type = output_cfg["type"]
+        name        = output_cfg.get("name", output_type)
+
+        log(f"🧠 Generating {name}...")
+        if mock:
+            content = mock_output(output_cfg, cfg)
+        elif ollama_available:
+            prev = previous_narratives if output_type == "narrative" else None
+            content = generate_output(output_cfg, results_data, cfg, prev)
+        else:
+            content = None
+
+        if content:
+            generated_outputs[output_type] = content
+            message = build_output_message(content, output_cfg, cfg)
+            log(f"📨 Sending {name}...")
+            delivery.send_long(message)
+        else:
+            log(f"⚠ Skipping {name}")
+        log("")
 
     if save:
         log("💾 Saving results...")
         timestamp = datetime.now().isoformat(timespec="seconds")
-        save_results(timestamp, topic, raw_briefing, narrative, cfg,
+        save_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
                      aggregated_from=previous_narratives or None)
         if previous_narratives:
             mark_aggregated([ts for ts, _ in previous_narratives])

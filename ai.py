@@ -4,16 +4,21 @@ import urllib.request
 from config import OLLAMA_URL, OLLAMA_MODEL, log
 
 
-def generate_narrative(results_data, cfg, previous_narratives=None):
-    results_text = ""
-    for section in results_data:
-        results_text += f"\n{section['section']}:\n"
-        for r in section["results"]:
-            results_text += f"- {r['title']}"
-            if r["snippet"]:
-                results_text += f": {r['snippet']}"
-            results_text += "\n"
+# ── prompt builders ──────────────────────────────────────────
 
+def _results_text(results_data):
+    out = ""
+    for section in results_data:
+        out += f"\n{section['section']}:\n"
+        for r in section["results"]:
+            out += f"- {r['title']}"
+            if r["snippet"]:
+                out += f": {r['snippet']}"
+            out += "\n"
+    return out
+
+
+def _narrative_prompt(output_cfg, results_data, cfg, previous_narratives):
     history_block = ""
     if previous_narratives:
         history_block = "\nPREVIOUS SUMMARIES (for context and trend continuity):\n"
@@ -26,7 +31,9 @@ def generate_narrative(results_data, cfg, previous_narratives=None):
         if previous_narratives else ""
     )
 
-    prompt = f"""/no_think
+    max_words = output_cfg.get("max_words", 500)
+
+    return f"""/no_think
 You are {cfg['ai_persona']}.
 Based on today's news below, write a concise, engaging narrative summary called "{cfg['ai_topic']}".
 
@@ -35,16 +42,54 @@ Rules:
 - Lead with the most important story
 - Mention key companies and deals
 - Add brief analysis on what trends you see
-- Keep it under 500 words
+- Keep it under {max_words} words
 - Write in a professional but accessible tone
 - Do NOT use markdown formatting, just plain text
 - End with one sentence on what to watch next
 {agg_instruction}
 {history_block}TODAY'S RAW NEWS DATA:
-{results_text}
+{_results_text(results_data)}
 
 Write the narrative now:"""
 
+
+def _tweet_prompt(output_cfg, results_data, cfg):
+    max_chars = output_cfg.get("max_chars", 280)
+    return f"""/no_think
+You are {cfg['ai_persona']}.
+Based on today's news below, write a single tweet-sized summary of the most important story.
+
+Rules:
+- Maximum {max_chars} characters including spaces
+- Lead with the biggest story
+- Plain text only, no hashtags, no markdown
+- One or two sentences maximum
+
+TODAY'S RAW NEWS DATA:
+{_results_text(results_data)}
+
+Write the tweet now:"""
+
+
+# ── prompt registry ──────────────────────────────────────────
+# To add a new output type: add an entry here returning a prompt string.
+
+_PROMPT_BUILDERS = {
+    "narrative": _narrative_prompt,
+    "tweet":     lambda cfg_out, rd, cfg, prev: _tweet_prompt(cfg_out, rd, cfg),
+}
+
+
+# ── public API ───────────────────────────────────────────────
+
+def generate_output(output_cfg, results_data, cfg, previous_narratives=None):
+    output_type = output_cfg.get("type", "narrative")
+    builder = _PROMPT_BUILDERS.get(output_type)
+    if not builder:
+        log(f"  ⚠ Unknown output type: {output_type}")
+        return None
+
+    prompt  = builder(output_cfg, results_data, cfg, previous_narratives)
     payload = json.dumps({
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
@@ -56,24 +101,25 @@ Write the narrative now:"""
         req = urllib.request.Request(f"{OLLAMA_URL}/api/chat", data=payload)
         req.add_header("Content-Type", "application/json")
         with urllib.request.urlopen(req, timeout=300) as resp:
-            data = json.loads(resp.read().decode())
+            data    = json.loads(resp.read().decode())
             content = data.get("message", {}).get("content", "").strip()
             if content:
-                log(f"  ✅ AI narrative: {len(content)} chars")
+                log(f"  ✅ {output_type}: {len(content)} chars")
                 return content
-            log("  ⚠ AI returned empty response")
+            log(f"  ⚠ AI returned empty response for {output_type}")
             return None
     except Exception as e:
-        log(f"  ⚠ AI narrative failed: {e}")
+        log(f"  ⚠ AI {output_type} failed: {e}")
         return None
 
 
-def mock_narrative(cfg):
+def mock_output(output_cfg, cfg):
+    output_type = output_cfg.get("type", "narrative")
+    if output_type == "tweet":
+        return f"[MOCK TWEET] Key story in {cfg['ai_topic']}: major development spotted, more details emerging. Watch this space."
     return (
         f"[MOCK NARRATIVE] This is a test narrative for {cfg['ai_topic']}. "
-        "In a real run, Ollama would generate several paragraphs of analysis here. "
-        "The formatting, delivery, and message splitting are all exercised in mock mode.\n\n"
-        "A second paragraph would discuss trends and key players. "
-        "This confirms the full pipeline is working end-to-end on your laptop.\n\n"
+        "In a real run, Ollama would generate several paragraphs of analysis here.\n\n"
+        "A second paragraph would discuss trends and key players.\n\n"
         "Watch for real data when you run this on the Mac Mini."
     )

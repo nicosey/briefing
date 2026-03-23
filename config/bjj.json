@@ -5,6 +5,10 @@
   "ai_persona": "a Brazilian jiu-jitsu journalist writing a daily briefing for competitive grapplers and enthusiasts",
   "ai_topic": "Today's BJJ Digest",
   "lookback_minutes": 120,
+  "outputs": [
+    {"type": "narrative", "name": "Daily Digest",   "max_words": 500},
+    {"type": "tweet",     "name": "Tweet Summary",  "max_chars": 280}
+  ],
   "searches": [
     {"emoji": "🏆", "title": "COMPETITION RESULTS",   "query": "BJJ jiu jitsu tournament results IBJJF ADCC competition 2025",                                    "count": 5, "category": "news"},
     {"emoji": "⭐", "title": "ATHLETE NEWS",           "query": "Gordon Ryan Mikey Musumeci Andre Galvao Craig Jones BJJ athlete news",                            "count": 4, "category": "news"},

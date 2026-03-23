@@ -35,13 +35,20 @@ def build_raw_briefing(results_data, cfg):
     return "\n".join(sections)
 
 
-def build_narrative_message(narrative, cfg):
+def build_output_message(content, output_cfg, cfg):
+    """Format a generated output for delivery. Dispatches by output type."""
+    output_type = output_cfg.get("type", "narrative")
+
+    if output_type == "tweet":
+        return f'{cfg["header_emoji"]} {content}'
+
+    # narrative (default)
     now = datetime.now()
     return (
         f'{cfg["header_emoji"]} <b>{cfg["ai_topic"].upper()}</b>\n'
         f'📅 {now.strftime("%A, %d %B %Y")}\n'
         f'{"─" * 30}\n\n'
-        f'{narrative}\n\n'
+        f'{content}\n\n'
         f'{"─" * 30}\n'
         f'🧠 <i>Written by {OLLAMA_MODEL}</i>'
     )

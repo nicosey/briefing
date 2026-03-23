@@ -34,9 +34,18 @@ def init_db():
                 timestamp       TEXT PRIMARY KEY,
                 topic           TEXT NOT NULL,
                 raw_briefing    TEXT,
-                narrative       TEXT,
                 aggregated_from TEXT DEFAULT '[]',
                 aggregated      INTEGER DEFAULT 0
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS outputs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_timestamp TEXT NOT NULL,
+                output_type   TEXT NOT NULL,
+                name          TEXT NOT NULL,
+                content       TEXT,
+                FOREIGN KEY(run_timestamp) REFERENCES runs(timestamp)
             )
         """)
         con.commit()
@@ -44,14 +53,14 @@ def init_db():
     _db_op(_)
 
 
-def save_run(timestamp, topic, raw_briefing, narrative, aggregated_from=None):
+def save_run(timestamp, topic, raw_briefing, aggregated_from=None):
     def _():
         con = _connect()
         con.execute(
             "INSERT OR REPLACE INTO runs "
-            "(timestamp, topic, raw_briefing, narrative, aggregated_from) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (timestamp, topic, raw_briefing, narrative, json.dumps(aggregated_from or []))
+            "(timestamp, topic, raw_briefing, aggregated_from) "
+            "VALUES (?, ?, ?, ?)",
+            (timestamp, topic, raw_briefing, json.dumps(aggregated_from or []))
         )
         con.commit()
         con.close()
@@ -59,11 +68,25 @@ def save_run(timestamp, topic, raw_briefing, narrative, aggregated_from=None):
     _db_op(_)
 
 
-def find_recent_runs(topic, lookback_minutes):
-    """Return [(timestamp, narrative)] for recent runs in chronological order.
+def save_output(run_timestamp, output_type, name, content):
+    def _():
+        con = _connect()
+        con.execute(
+            "INSERT INTO outputs (run_timestamp, output_type, name, content) "
+            "VALUES (?, ?, ?, ?)",
+            (run_timestamp, output_type, name, content)
+        )
+        con.commit()
+        con.close()
+        log(f"  🗄  DB: saved {output_type} output for {run_timestamp}")
+    _db_op(_)
 
-    Scans newest-first and stops as soon as it hits a run that already
-    aggregated its predecessors — no need to look further back.
+
+def find_recent_runs(topic, lookback_minutes):
+    """Return [(timestamp, narrative_content)] for recent runs in chronological order.
+
+    Uses the outputs table (type='narrative'). Stops as soon as it hits a run
+    that already aggregated its predecessors — no need to look further back.
     """
     cutoff = datetime.fromtimestamp(
         datetime.now().timestamp() - lookback_minutes * 60
@@ -72,9 +95,11 @@ def find_recent_runs(topic, lookback_minutes):
     def _():
         con = _connect()
         rows = con.execute(
-            "SELECT timestamp, narrative, aggregated_from FROM runs "
-            "WHERE topic=? AND timestamp>=? AND narrative IS NOT NULL "
-            "ORDER BY timestamp DESC",
+            "SELECT r.timestamp, o.content, r.aggregated_from "
+            "FROM runs r "
+            "JOIN outputs o ON o.run_timestamp = r.timestamp "
+            "WHERE r.topic=? AND r.timestamp>=? AND o.output_type='narrative' "
+            "ORDER BY r.timestamp DESC",
             (topic, cutoff)
         ).fetchall()
         con.close()
@@ -82,8 +107,8 @@ def find_recent_runs(topic, lookback_minutes):
 
     rows = _db_op(_)
     found = []
-    for ts, narrative, agg_from in rows:
-        found.append((ts, narrative))
+    for ts, content, agg_from in rows:
+        found.append((ts, content))
         if json.loads(agg_from):  # this run already pulled in predecessors
             break
 
