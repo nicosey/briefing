@@ -55,18 +55,24 @@ Write the narrative now:"""
 
 def _tweet_prompt(output_cfg, results_data, cfg):
     max_chars = output_cfg.get("max_chars", 280)
+
+    # Prefer a section explicitly marked as latest news, otherwise use all
+    latest_sections = [s for s in results_data if "latest" in s["section"].lower()]
+    feed = latest_sections if latest_sections else results_data
+
     return f"""/no_think
 You are {cfg['ai_persona']}.
-Based on today's news below, write a single tweet-sized summary of the most important story.
+Based on the latest news below, write a single tweet-sized update about the most breaking or recent story.
 
 Rules:
 - Maximum {max_chars} characters including spaces
-- Lead with the biggest story
+- Focus on the single most recent or newsworthy headline
 - Plain text only, no hashtags, no markdown
 - One or two sentences maximum
+- Write in present tense
 
-TODAY'S RAW NEWS DATA:
-{_results_text(results_data)}
+LATEST NEWS:
+{_results_text(feed)}
 
 Write the tweet now:"""
 
