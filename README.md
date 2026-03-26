@@ -242,11 +242,99 @@ tail -f output/briefing.error.log
 launchctl unload ~/Library/LaunchAgents/com.briefing.robotics.plist
 ```
 
+### Example: morning briefing + hourly tweet (UK capital markets)
+
+Two plists — one fires at 7am for the full briefing (narrative→Telegram, tweet→X), another fires every hour for a quick tweet→X update.
+
+**`com.briefing.uk_capital_markets.plist`** — 7am daily:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.briefing.uk_capital_markets</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
+        <string>uk_capital_markets</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+```
+
+**`com.briefing.uk_capital_markets_update.plist`** — hourly tweet:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.briefing.uk_capital_markets_update</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
+        <string>uk_capital_markets_update</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_update.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_update.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+```
+
+> launchd doesn't support a simple "every hour" interval with `StartCalendarInterval` — you list each hour explicitly. The above covers 8am–4pm (market hours). Adjust as needed.
+
 ### Notes
 
 - launchd runs jobs as your user, so credentials in `.env` are picked up normally
 - If the machine is asleep at the scheduled time, the job is skipped — it does not catch up on wake
-- To run multiple topics, create one plist per topic with a unique `Label`
 - publish.py is safe to run independently at any time; it skips already-published outbox entries
 
 ## Output structure
