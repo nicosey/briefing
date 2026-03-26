@@ -177,6 +177,78 @@ python briefing.py my_briefing --mock --dry-run
 python publish.py --dry-run
 ```
 
+## Scheduling on macOS (launchd)
+
+`run.sh` wraps briefing + publish in a single script so launchd only needs one job. publish.py only fires if briefing.py exits successfully (`set -e` in the script handles this).
+
+### 1. Create the plist
+
+Save as `~/Library/LaunchAgents/com.briefing.robotics.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.briefing.robotics</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
+        <string>robotics</string>
+        <string>x</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/briefing.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USER/projects/briefing/output/briefing.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+```
+
+Replace `YOUR_USER` and adjust the `Hour`/`Minute` to your preferred schedule.
+
+### 2. Load and test
+
+```bash
+# Load the job
+launchctl load ~/Library/LaunchAgents/com.briefing.robotics.plist
+
+# Run it immediately to test
+launchctl start com.briefing.robotics
+
+# Check logs
+tail -f output/briefing.log
+tail -f output/briefing.error.log
+
+# Unload if you need to edit the plist
+launchctl unload ~/Library/LaunchAgents/com.briefing.robotics.plist
+```
+
+### Notes
+
+- launchd runs jobs as your user, so credentials in `.env` are picked up normally
+- If the machine is asleep at the scheduled time, the job is skipped — it does not catch up on wake
+- To run multiple topics, create one plist per topic with a unique `Label`
+- publish.py is safe to run independently at any time; it skips already-published outbox entries
+
 ## Output structure
 
 ```text
