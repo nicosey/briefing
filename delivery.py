@@ -118,28 +118,34 @@ class XDelivery(Delivery):
             page = context.new_page()
 
             try:
-                page.goto("https://x.com/compose/tweet", timeout=20000)
-                page.wait_for_load_state("networkidle", timeout=15000)
+                log("  ℹ X: navigating to compose...")
+                page.goto("https://x.com/compose/tweet", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=20000)
+                log(f"  ℹ X: landed on {page.url}")
 
                 # Login if redirected away from compose
                 if "login" in page.url or page.url.rstrip("/") in ("https://x.com", "https://twitter.com"):
                     if not self._login(page):
                         browser.close()
                         return False
-                    page.goto("https://x.com/compose/tweet", timeout=20000)
-                    page.wait_for_load_state("networkidle", timeout=15000)
+                    log("  ℹ X: navigating to compose after login...")
+                    page.goto("https://x.com/compose/tweet", timeout=30000)
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                    log(f"  ℹ X: landed on {page.url}")
 
                 # Type into the compose box
+                log("  ℹ X: waiting for compose box...")
                 editor = page.locator('[data-testid="tweetTextarea_0"]')
-                editor.wait_for(timeout=10000)
+                editor.wait_for(timeout=15000)
                 editor.click()
                 page.keyboard.type(message, delay=30)
 
                 # Post
+                log("  ℹ X: clicking post...")
                 post_btn = page.locator('[data-testid="tweetButtonInline"]')
-                post_btn.wait_for(timeout=5000)
+                post_btn.wait_for(timeout=10000)
                 post_btn.click()
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(3000)
 
                 # Persist session cookies
                 os.makedirs(os.path.dirname(self.session_file) or ".", exist_ok=True)
@@ -162,20 +168,31 @@ class XDelivery(Delivery):
     def _login(self, page):
         log("  ℹ X: logging in...")
         try:
-            page.goto("https://x.com/login", timeout=20000)
-            page.wait_for_load_state("networkidle", timeout=15000)
+            page.goto("https://x.com/login", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=20000)
 
+            log("  ℹ X: entering username...")
             page.locator('input[autocomplete="username"]').fill(self.username)
             page.keyboard.press("Enter")
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(2000)
+            log(f"  ℹ X: after username, url={page.url}")
 
-            page.locator('input[name="password"]').wait_for(timeout=8000)
+            # X sometimes asks for email/phone verification before password
+            if page.locator('input[data-testid="ocfEnterTextTextInput"]').is_visible():
+                log("  ℹ X: identity verification step — entering username again...")
+                page.locator('input[data-testid="ocfEnterTextTextInput"]').fill(self.username)
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(2000)
+
+            log("  ℹ X: entering password...")
+            page.locator('input[name="password"]').wait_for(timeout=10000)
             page.locator('input[name="password"]').fill(self.password)
             page.keyboard.press("Enter")
-            page.wait_for_load_state("networkidle", timeout=15000)
+            page.wait_for_load_state("networkidle", timeout=20000)
+            log(f"  ℹ X: after password, url={page.url}")
 
             if "login" in page.url:
-                log("  ❌ X: login failed — check TWITTER_USERNAME / TWITTER_PASSWORD in .env")
+                log("  ❌ X: login failed — check X_USERNAME / X_PASSWORD in .env")
                 return False
 
             log("  ✅ X: logged in")
