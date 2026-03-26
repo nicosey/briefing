@@ -228,12 +228,12 @@ REGISTRY = {
 }
 
 
-def get_delivery(dry_run, cfg=None):
+def make_delivery(dest, dry_run, cfg=None):
+    """Build a Delivery for a specific dest string (comma-separated names)."""
     if dry_run:
         return ConsoleDelivery()
 
     cfg   = cfg or {}
-    dest  = os.environ.get("BRIEFING_DEST", "telegram")
     names = [d.strip() for d in dest.split(",") if d.strip()]
 
     deliveries = []
@@ -244,3 +244,8 @@ def get_delivery(dry_run, cfg=None):
         deliveries.append(REGISTRY[name](cfg))
 
     return deliveries[0] if len(deliveries) == 1 else MultiDelivery(deliveries)
+
+
+def get_delivery(dry_run, cfg=None):
+    dest = os.environ.get("BRIEFING_DEST", "console")
+    return make_delivery(dest, dry_run, cfg)

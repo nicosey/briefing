@@ -7,17 +7,17 @@ from datetime import datetime
 ssl._create_default_https_context = ssl._create_unverified_context
 
 from config import (
-    TELEGRAM_BOT_TOKEN, SEARXNG_URL, OLLAMA_URL,
+    SEARXNG_URL, OLLAMA_URL,
     log, load_topic_config
 )
-from db        import init_db, save_run, save_output, find_recent_runs, mark_aggregated
-from delivery  import get_delivery, REGISTRY as DELIVERY_REGISTRY
+from db        import init_db, save_run, save_output, add_to_outbox, find_recent_runs, mark_aggregated
 from search    import fetch_all_results, mock_fetch_results
 from ai        import generate_output, mock_output
 from format    import build_raw_briefing, build_output_message
 
 
-def save_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg, aggregated_from=None):
+def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
+                    default_dest, aggregated_from=None):
     agg_timestamps = [ts for ts, _ in (aggregated_from or [])]
     save_run(timestamp, topic, raw_briefing, aggregated_from=agg_timestamps)
 
@@ -25,8 +25,13 @@ def save_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg,
         output_type = output_cfg["type"]
         name        = output_cfg.get("name", output_type)
         content     = generated_outputs.get(output_type)
-        if content:
-            save_output(timestamp, output_type, name, content)
+        if not content:
+            continue
+        output_id = save_output(timestamp, output_type, name, content)
+        message   = build_output_message(content, output_cfg, cfg)
+        out_dest  = output_cfg.get("dest", default_dest)
+        for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
+            add_to_outbox(output_id, dest, message)
 
     # write files
     safe_ts = timestamp.replace(":", "-").replace("T", "_")
@@ -47,7 +52,6 @@ def main():
     raw_args = sys.argv[1:]
     mock    = "--mock"    in raw_args
     dry_run = "--dry-run" in raw_args
-    save    = "--save"    in raw_args
 
     lookback = 0
     for i, a in enumerate(raw_args):
@@ -72,13 +76,12 @@ def main():
 
     if not args:
         available = [f[:-5] for f in os.listdir("config") if f.endswith(".json")]
-        print("Usage: python briefing.py <topic> [--mock] [--dry-run] [--save] [--lookback N]")
+        print("Usage: python briefing.py <topic> [--mock] [--dry-run] [--lookback N]")
         print("  --mock        fake SearXNG + Ollama (no services needed)")
-        print("  --dry-run     skip delivery, print to terminal instead")
-        print("  --save        write results to DB + output/<timestamp>_<topic>/")
+        print("  --dry-run     skip DB write and outbox, print to terminal instead")
         print("  --lookback N  include last N minutes of saved summaries as AI context")
         print(f"Available topics: {', '.join(sorted(available))}")
-        print(f"Delivery destinations: {', '.join(DELIVERY_REGISTRY)} (set BRIEFING_DEST in .env)")
+        print("Run publish.py to deliver queued outputs.")
         sys.exit(1)
 
     topic = args[0]
@@ -92,20 +95,15 @@ def main():
         {"type": "narrative", "name": cfg.get("ai_topic", "Daily Digest")}
     ])
 
-    delivery  = get_delivery(dry_run)
-    dest_name = "console" if dry_run else os.environ.get("BRIEFING_DEST", "telegram")
+    default_dest = os.environ.get("BRIEFING_DEST", "console")
+    timestamp    = datetime.now().isoformat(timespec="seconds")
 
     log("=" * 40)
     log(cfg["title"]
-        + (" [MOCK]"                   if mock              else "")
-        + (f" [{dest_name.upper()}]")
-        + (" [SAVE]"                   if save              else "")
-        + (f" [LOOKBACK {lookback}m]"  if lookback and save else ""))
+        + (" [MOCK]"                if mock              else "")
+        + (" [DRY RUN]"             if dry_run           else "")
+        + (f" [LOOKBACK {lookback}m]" if lookback        else ""))
     log("=" * 40)
-
-    if not dry_run and not mock and dest_name == "telegram" and TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        log("❌ Set TELEGRAM_BOT_TOKEN in .env")
-        sys.exit(1)
 
     if mock:
         log("⚠  Mock mode — skipping SearXNG and Ollama")
@@ -130,11 +128,11 @@ def main():
 
     log("")
 
-    if save:
+    if not dry_run:
         init_db()
 
     previous_narratives = []
-    if lookback and save:
+    if lookback and not dry_run:
         previous_narratives = find_recent_runs(topic, lookback)
         if previous_narratives:
             log(f"📚 Found {len(previous_narratives)} previous summary(s) to aggregate")
@@ -146,10 +144,8 @@ def main():
     results_data = mock_fetch_results(cfg["searches"]) if mock else fetch_all_results(cfg["searches"])
     log("")
 
-    log("📨 Sending raw briefing...")
     raw_briefing = build_raw_briefing(results_data, cfg)
-    log(f"  Raw briefing: {len(raw_briefing)} chars")
-    delivery.send_long(raw_briefing)
+    log(f"📋 Raw briefing: {len(raw_briefing)} chars")
     log("")
 
     generated_outputs = {}
@@ -169,18 +165,16 @@ def main():
 
         if content:
             generated_outputs[output_type] = content
-            message = build_output_message(content, output_cfg, cfg)
-            log(f"📨 Sending {name}...")
-            delivery.send_long(message)
+            out_dest = output_cfg.get("dest", default_dest)
+            log(f"  ✅ {name} ({len(content)} chars) → queued for {out_dest}")
         else:
-            log(f"⚠ Skipping {name}")
+            log(f"  ⚠ Skipping {name}")
         log("")
 
-    if save:
+    if not dry_run:
         log("💾 Saving results...")
-        timestamp = datetime.now().isoformat(timespec="seconds")
-        save_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
-                     aggregated_from=previous_narratives or None)
+        persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
+                        default_dest, aggregated_from=previous_narratives or None)
         if previous_narratives:
             mark_aggregated([ts for ts, _ in previous_narratives])
             log(f"  ✅ Marked {len(previous_narratives)} previous run(s) as aggregated")

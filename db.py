@@ -48,6 +48,17 @@ def init_db():
                 FOREIGN KEY(run_timestamp) REFERENCES runs(timestamp)
             )
         """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS outbox (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                output_id    INTEGER NOT NULL,
+                dest         TEXT NOT NULL,
+                message      TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                published_at TEXT,
+                FOREIGN KEY(output_id) REFERENCES outputs(id)
+            )
+        """)
         con.commit()
         con.close()
     _db_op(_)
@@ -69,16 +80,67 @@ def save_run(timestamp, topic, raw_briefing, aggregated_from=None):
 
 
 def save_output(run_timestamp, output_type, name, content):
+    """Save an output and return its inserted id."""
     def _():
         con = _connect()
-        con.execute(
+        cur = con.execute(
             "INSERT INTO outputs (run_timestamp, output_type, name, content) "
             "VALUES (?, ?, ?, ?)",
             (run_timestamp, output_type, name, content)
         )
+        output_id = cur.lastrowid
         con.commit()
         con.close()
         log(f"  🗄  DB: saved {output_type} output for {run_timestamp}")
+        return output_id
+    return _db_op(_)
+
+
+def add_to_outbox(output_id, dest, message):
+    def _():
+        con = _connect()
+        con.execute(
+            "INSERT INTO outbox (output_id, dest, message, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (output_id, dest, message, datetime.now().isoformat(timespec="seconds"))
+        )
+        con.commit()
+        con.close()
+        log(f"  📬 Outbox: queued for {dest}")
+    _db_op(_)
+
+
+def get_pending_outbox(dest=None):
+    """Return [(outbox_id, dest, message)] for unpublished entries."""
+    def _():
+        con = _connect()
+        if dest:
+            rows = con.execute(
+                "SELECT id, dest, message FROM outbox "
+                "WHERE published_at IS NULL AND dest=? "
+                "ORDER BY created_at",
+                (dest,)
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT id, dest, message FROM outbox "
+                "WHERE published_at IS NULL "
+                "ORDER BY created_at"
+            ).fetchall()
+        con.close()
+        return rows
+    return _db_op(_)
+
+
+def mark_outbox_published(outbox_id):
+    def _():
+        con = _connect()
+        con.execute(
+            "UPDATE outbox SET published_at=? WHERE id=?",
+            (datetime.now().isoformat(timespec="seconds"), outbox_id)
+        )
+        con.commit()
+        con.close()
     _db_op(_)
 
 
