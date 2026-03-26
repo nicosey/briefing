@@ -244,9 +244,9 @@ launchctl unload ~/Library/LaunchAgents/com.briefing.robotics.plist
 
 ### Example: morning briefing + hourly tweet (UK capital markets)
 
-Two plists — one fires at 7am for the full briefing (narrative→Telegram, tweet→X), another fires every hour for a quick tweet→X update.
+Both plists use the same config. `publish.py` (no dest arg) publishes everything at 7am; `publish.py x` on the hourly runs publishes X only — the narrative stays in the outbox undelivered until it's already been sent at 7am.
 
-**`com.briefing.uk_capital_markets.plist`** — 7am daily:
+**`com.briefing.uk_capital_markets.plist`** — 7am daily (narrative→Telegram + tweet→X):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -285,7 +285,7 @@ Two plists — one fires at 7am for the full briefing (narrative→Telegram, twe
 </plist>
 ```
 
-**`com.briefing.uk_capital_markets_update.plist`** — hourly tweet:
+**`com.briefing.uk_capital_markets_hourly.plist`** — hourly tweet→X (same config, X only):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -294,12 +294,13 @@ Two plists — one fires at 7am for the full briefing (narrative→Telegram, twe
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.briefing.uk_capital_markets_update</string>
+    <string>com.briefing.uk_capital_markets_hourly</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
-        <string>uk_capital_markets_update</string>
+        <string>uk_capital_markets</string>
+        <string>x</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -316,9 +317,9 @@ Two plists — one fires at 7am for the full briefing (narrative→Telegram, twe
     </array>
 
     <key>StandardOutPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_update.log</string>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_hourly.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_update.error.log</string>
+    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_hourly.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
