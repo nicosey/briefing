@@ -53,12 +53,19 @@ Rules:
 Write the narrative now:"""
 
 
-def _tweet_prompt(output_cfg, results_data, cfg):
+def _tweet_prompt(output_cfg, results_data, cfg, previous_tweets=None):
     max_chars = output_cfg.get("max_chars", 280)
 
     # Prefer a section explicitly marked as latest news, otherwise use all
     latest_sections = [s for s in results_data if "latest" in s["section"].lower()]
     feed = latest_sections if latest_sections else results_data
+
+    recent_block = ""
+    if previous_tweets:
+        recent_block = "\nRECENT TWEETS ALREADY POSTED (do NOT repeat these stories):\n"
+        for t in previous_tweets:
+            recent_block += f"- {t}\n"
+        recent_block += "\n"
 
     return f"""/no_think
 You are {cfg['ai_persona']}.
@@ -70,7 +77,8 @@ Rules:
 - Plain text only, no hashtags, no markdown
 - One or two sentences maximum
 - Write in present tense
-
+- Pick a DIFFERENT story from any recently posted tweets listed below
+{recent_block}
 LATEST NEWS:
 {_results_text(feed)}
 
@@ -82,7 +90,7 @@ Write the tweet now:"""
 
 _PROMPT_BUILDERS = {
     "narrative": _narrative_prompt,
-    "tweet":     lambda cfg_out, rd, cfg, prev: _tweet_prompt(cfg_out, rd, cfg),
+    "tweet":     lambda cfg_out, rd, cfg, prev: _tweet_prompt(cfg_out, rd, cfg, prev),
 }
 
 

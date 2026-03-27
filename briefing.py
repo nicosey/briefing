@@ -10,7 +10,7 @@ from config import (
     SEARXNG_URL, OLLAMA_URL,
     log, load_topic_config
 )
-from db        import init_db, save_run, save_output, add_to_outbox, find_recent_runs, mark_aggregated
+from db        import init_db, save_run, save_output, add_to_outbox, find_recent_runs, find_recent_tweets, mark_aggregated
 from search    import fetch_all_results, mock_fetch_results
 from ai        import generate_output, mock_output
 from format    import build_raw_briefing, build_output_message
@@ -158,7 +158,13 @@ def main():
         if mock:
             content = mock_output(output_cfg, cfg)
         elif ollama_available:
-            prev = previous_narratives if output_type == "narrative" else None
+            if output_type == "narrative":
+                prev = previous_narratives
+            elif output_type == "tweet" and not dry_run:
+                lookback_hours = output_cfg.get("tweet_lookback_hours", 6)
+                prev = find_recent_tweets(topic, lookback_hours * 60)
+            else:
+                prev = None
             content = generate_output(output_cfg, results_data, cfg, prev)
         else:
             content = None

@@ -177,6 +177,27 @@ def find_recent_runs(topic, lookback_minutes):
     return list(reversed(found))  # chronological order
 
 
+def find_recent_tweets(topic, lookback_minutes):
+    """Return list of recent tweet content for a topic, newest first."""
+    cutoff = datetime.fromtimestamp(
+        datetime.now().timestamp() - lookback_minutes * 60
+    ).isoformat()
+
+    def _():
+        con = _connect()
+        rows = con.execute(
+            "SELECT o.content FROM runs r "
+            "JOIN outputs o ON o.run_timestamp = r.timestamp "
+            "WHERE r.topic=? AND r.timestamp>=? AND o.output_type='tweet' "
+            "ORDER BY r.timestamp DESC",
+            (topic, cutoff)
+        ).fetchall()
+        con.close()
+        return [row[0] for row in rows]
+
+    return _db_op(_)
+
+
 def mark_aggregated(timestamps):
     def _():
         con = _connect()
