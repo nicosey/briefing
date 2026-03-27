@@ -168,10 +168,14 @@ class XDelivery(Delivery):
                     browser.close()
                     return True
 
-                # Check for any error toast
+                # Check for any error toast (ignore success toasts)
                 error_toast = page.locator('[data-testid="toast"]')
                 if error_toast.is_visible():
                     msg = error_toast.inner_text()
+                    if "sent" in msg.lower() or "posted" in msg.lower():
+                        log(f"  ✅ X: posted (confirmed via toast)")
+                        browser.close()
+                        return True
                     log(f"  ❌ X: post rejected — {msg}")
                     browser.close()
                     return False
