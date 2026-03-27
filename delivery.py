@@ -157,7 +157,10 @@ class XDelivery(Delivery):
                 ).first
                 post_btn.wait_for(timeout=10000)
                 page.wait_for_timeout(500)
-                post_btn.evaluate("el => el.click()")
+                box = post_btn.bounding_box()
+                page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                page.wait_for_timeout(200)
+                page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 page.wait_for_timeout(6000)
 
                 # Check for duplicate content error
