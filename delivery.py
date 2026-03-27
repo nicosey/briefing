@@ -128,7 +128,8 @@ class XDelivery(Delivery):
             try:
                 log("  ℹ X: navigating to compose...")
                 page.goto("https://x.com/compose/tweet", timeout=30000)
-                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_load_state("domcontentloaded", timeout=20000)
+                page.wait_for_timeout(2000)
                 log(f"  ℹ X: landed on {page.url}")
 
                 # Login if redirected away from compose
@@ -138,7 +139,8 @@ class XDelivery(Delivery):
                         return False
                     log("  ℹ X: navigating to compose after login...")
                     page.goto("https://x.com/compose/tweet", timeout=30000)
-                    page.wait_for_load_state("networkidle", timeout=20000)
+                    page.wait_for_load_state("domcontentloaded", timeout=20000)
+                    page.wait_for_timeout(2000)
                     log(f"  ℹ X: landed on {page.url}")
 
                 # Type into the compose box
@@ -177,7 +179,7 @@ class XDelivery(Delivery):
         log("  ℹ X: logging in...")
         try:
             page.goto("https://x.com/login", timeout=30000)
-            page.wait_for_load_state("networkidle", timeout=20000)
+            page.wait_for_load_state("domcontentloaded", timeout=20000)
 
             log("  ℹ X: entering username...")
             page.locator('input[autocomplete="username"]').fill(self.username)
@@ -196,7 +198,8 @@ class XDelivery(Delivery):
             page.locator('input[name="password"]').wait_for(timeout=10000)
             page.locator('input[name="password"]').fill(self.password)
             page.keyboard.press("Enter")
-            page.wait_for_load_state("networkidle", timeout=20000)
+            page.wait_for_load_state("domcontentloaded", timeout=20000)
+            page.wait_for_timeout(2000)
             log(f"  ℹ X: after password, url={page.url}")
 
             if "login" in page.url:
