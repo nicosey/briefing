@@ -145,7 +145,7 @@ class XDelivery(Delivery):
 
                 # Type into the compose box
                 log("  ℹ X: waiting for compose box...")
-                editor = page.locator('[data-testid="tweetTextarea_0"]')
+                editor = page.locator('[data-testid="tweetTextarea_0"]').first
                 editor.wait_for(timeout=15000)
                 editor.click()
                 page.keyboard.type(message, delay=30)
