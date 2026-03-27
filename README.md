@@ -164,8 +164,8 @@ Results are stored in `output/briefings.db` (SQLite — no server required):
 | Table | Contents |
 | --- | --- |
 | `runs` | One row per run: topic, timestamp, raw headlines, aggregation state |
-| `outputs` | One row per AI output per run: type, name, content |
-| `outbox` | One row per output×destination: delivery status and formatted message |
+| `outputs` | One row per AI output per run: type, name, content — kept permanently, used for tweet deduplication |
+| `outbox` | One row per output×destination: delivery status and formatted message — entries older than 24 hours are deleted automatically after each publish |
 
 ## Adding a topic
 
