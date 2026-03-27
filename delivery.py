@@ -157,7 +157,7 @@ class XDelivery(Delivery):
                 ).first
                 post_btn.wait_for(timeout=10000)
                 post_btn.click()
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(5000)
 
                 # Check for duplicate content error
                 duplicate = page.locator('text="already said that"').is_visible() or \
@@ -166,6 +166,21 @@ class XDelivery(Delivery):
                     log("  ℹ X: duplicate tweet — already posted, marking done")
                     browser.close()
                     return True
+
+                # Check for any error toast
+                error_toast = page.locator('[data-testid="toast"]')
+                if error_toast.is_visible():
+                    msg = error_toast.inner_text()
+                    log(f"  ❌ X: post rejected — {msg}")
+                    browser.close()
+                    return False
+
+                # Verify compose box is gone (post was accepted)
+                compose_gone = not page.locator('[data-testid="tweetTextarea_0"]').is_visible()
+                if not compose_gone:
+                    log(f"  ❌ X: post may have failed — compose box still visible after click")
+                    browser.close()
+                    return False
 
                 # Persist session cookies
                 os.makedirs(os.path.dirname(self.session_file) or ".", exist_ok=True)
