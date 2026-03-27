@@ -74,9 +74,9 @@ Based on the latest news below, write a single tweet-sized update about the most
 Rules:
 - Maximum {max_chars} characters including spaces
 - Focus on the single most recent or newsworthy headline
-- Plain text only, no hashtags, no markdown
 - One or two sentences maximum
 - Write in present tense
+- End with 1-2 relevant hashtags
 - Pick a DIFFERENT story from any recently posted tweets listed below
 {recent_block}
 LATEST NEWS:
