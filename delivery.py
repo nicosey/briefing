@@ -157,8 +157,8 @@ class XDelivery(Delivery):
                 ).first
                 post_btn.wait_for(timeout=10000)
                 page.wait_for_timeout(500)
-                page.keyboard.press("Meta+Return")
-                page.wait_for_timeout(5000)
+                post_btn.evaluate("el => el.click()")
+                page.wait_for_timeout(6000)
 
                 # Check for duplicate content error
                 duplicate = page.locator('text="already said that"').is_visible() or \
@@ -176,10 +176,9 @@ class XDelivery(Delivery):
                     browser.close()
                     return False
 
-                # Verify compose box is gone (post was accepted)
-                compose_gone = not page.locator('[data-testid="tweetTextarea_0"]').is_visible()
-                if not compose_gone:
-                    log(f"  ❌ X: post may have failed — compose box still visible after click")
+                # Verify we navigated away from compose (post was accepted)
+                if "compose" in page.url:
+                    log(f"  ❌ X: post may have failed — still on compose page after click")
                     browser.close()
                     return False
 
