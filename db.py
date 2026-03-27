@@ -132,6 +132,22 @@ def get_pending_outbox(dest=None):
     return _db_op(_)
 
 
+def cleanup_outbox(max_age_hours=24):
+    """Delete outbox entries older than max_age_hours."""
+    def _():
+        con = _connect()
+        cur = con.execute(
+            "DELETE FROM outbox WHERE created_at < datetime('now', ?)",
+            (f"-{max_age_hours} hours",)
+        )
+        count = cur.rowcount
+        con.commit()
+        con.close()
+        if count:
+            log(f"  🗄  DB: cleaned up {count} outbox entr{'y' if count == 1 else 'ies'} older than {max_age_hours}h")
+    _db_op(_)
+
+
 def mark_outbox_published(outbox_id):
     def _():
         con = _connect()

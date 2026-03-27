@@ -1,7 +1,7 @@
 import sys
 
 from config import log
-from db     import init_db, get_pending_outbox, mark_outbox_published
+from db     import init_db, get_pending_outbox, mark_outbox_published, cleanup_outbox
 from delivery import make_delivery
 
 
@@ -29,6 +29,7 @@ def main():
             mark_outbox_published(outbox_id)
         log("")
 
+    cleanup_outbox(max_age_hours=24)
     log("Done!")
 
 
