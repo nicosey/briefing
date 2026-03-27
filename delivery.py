@@ -156,9 +156,8 @@ class XDelivery(Delivery):
                     '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
                 ).first
                 post_btn.wait_for(timeout=10000)
-                post_btn.scroll_into_view_if_needed()
                 page.wait_for_timeout(500)
-                post_btn.click(force=True)
+                page.keyboard.press("Meta+Return")
                 page.wait_for_timeout(5000)
 
                 # Check for duplicate content error
