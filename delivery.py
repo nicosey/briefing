@@ -150,9 +150,11 @@ class XDelivery(Delivery):
                 editor.click()
                 page.keyboard.type(message, delay=30)
 
-                # Post
+                # Post — try both old and new button testids
                 log("  ℹ X: clicking post...")
-                post_btn = page.locator('[data-testid="tweetButtonInline"]')
+                post_btn = page.locator(
+                    '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
+                ).first
                 post_btn.wait_for(timeout=10000)
                 post_btn.click()
                 page.wait_for_timeout(3000)
