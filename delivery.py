@@ -103,8 +103,16 @@ class XDelivery(Delivery):
             return False
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=self.headless)
-            context = browser.new_context()
+            browser = p.chromium.launch(
+                headless=self.headless,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/123.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800},
+            )
 
             # Restore saved session if available
             if os.path.isfile(self.session_file):

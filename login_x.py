@@ -15,8 +15,16 @@ except ImportError:
     raise SystemExit(1)
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False)
-    context = browser.new_context()
+    browser = p.chromium.launch(
+        headless=False,
+        args=["--disable-blink-features=AutomationControlled"],
+    )
+    context = browser.new_context(
+        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/123.0.0.0 Safari/537.36",
+        viewport={"width": 1280, "height": 800},
+    )
     page    = context.new_page()
 
     page.goto("https://x.com/login")
