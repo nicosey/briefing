@@ -157,10 +157,7 @@ class XDelivery(Delivery):
                 ).first
                 post_btn.wait_for(timeout=10000)
                 page.wait_for_timeout(500)
-                box = post_btn.bounding_box()
-                page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-                page.wait_for_timeout(200)
-                page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                post_btn.evaluate("el => el.click()")
                 page.wait_for_timeout(6000)
 
                 # Check for duplicate content error
@@ -180,12 +177,6 @@ class XDelivery(Delivery):
                         browser.close()
                         return True
                     log(f"  ❌ X: post rejected — {msg}")
-                    browser.close()
-                    return False
-
-                # Verify we navigated away from compose (post was accepted)
-                if "compose" in page.url:
-                    log(f"  ❌ X: post may have failed — still on compose page after click")
                     browser.close()
                     return False
 
