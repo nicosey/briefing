@@ -23,6 +23,8 @@ A lightweight daily news briefing pipeline. Searches for recent news via [SearXN
 ```bash
 cp .env.example .env
 # edit .env with your values
+pip3 install -r requirements.txt
+playwright install chromium
 ```
 
 ### .env
@@ -39,10 +41,23 @@ TELEGRAM_CHAT_ID=your_chat_id
 # X / Twitter (optional)
 X_USERNAME=your_username
 X_PASSWORD=your_password
+X_HEADLESS=false
 
 # Default outbox destination for outputs without an explicit dest (default: console)
 BRIEFING_DEST=telegram
 ```
+
+> **X note:** Set `X_HEADLESS=false` — X detects and blocks headless Chromium. On a headless server this requires a virtual display (e.g. Xvfb).
+
+### First-time X login
+
+Run this once to save a session so automated posting works without logging in each time:
+
+```bash
+python3 login_x.py
+```
+
+A browser window opens — log in manually (handles CAPTCHAs and 2FA), then press Enter. The session is saved to `output/.x_session.json` and reused on all future runs. Re-run `login_x.py` if the session expires.
 
 ## Usage
 
@@ -56,6 +71,9 @@ python publish.py
 # Publish to a specific destination only
 python publish.py telegram
 python publish.py x
+
+# Preview without publishing (dry run)
+python publish.py --dry-run
 ```
 
 ### briefing.py options
@@ -110,14 +128,18 @@ Each topic config defines an `outputs` array controlling what the AI generates p
 ```json
 "outputs": [
   {"type": "narrative", "name": "Daily Digest",  "max_words": 500},
-  {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280}
+  {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "tweet_lookback_hours": 6}
 ]
 ```
 
 | Type | Description |
 | --- | --- |
 | `narrative` | 3–4 paragraph analysis, up to `max_words` |
-| `tweet` | Single breaking-news sentence, up to `max_chars`. If the config has a search section with "latest" in the title, the tweet is drawn from that section only — keeping it focused on the most recent stories |
+| `tweet` | Single breaking-news sentence, up to `max_chars`. Looks back at recent tweets to avoid repeating the same story |
+
+**Tweet deduplication:** The `tweet_lookback_hours` field (default: 6) controls how far back the AI looks when avoiding repeated stories. Increase it for less frequent runs, decrease it if stories change quickly.
+
+**Latest news focus:** Name a search section with "latest" in the title (e.g. `LATEST UK CAPITAL MARKETS NEWS`) and the tweet will draw exclusively from that section.
 
 To add a new output type: add a prompt builder to `ai.py`, a formatter to `format.py`, and an entry in the config.
 
@@ -159,7 +181,7 @@ Create a JSON file in `config/`:
   "lookback_minutes": 120,
   "outputs": [
     {"type": "narrative", "name": "Daily Digest",  "max_words": 500, "dest": "telegram"},
-    {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "x"}
+    {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "x", "tweet_lookback_hours": 6}
   ],
   "searches": [
     {"emoji": "📰", "title": "LATEST MY TOPIC NEWS", "query": "my topic news today", "count": 5, "category": "news"},
@@ -167,8 +189,6 @@ Create a JSON file in `config/`:
   ]
 }
 ```
-
-> **Tip:** Name one search section with "latest" in the title (e.g. `LATEST MY TOPIC NEWS`) and the tweet output will draw exclusively from that section.
 
 Then run:
 
@@ -183,7 +203,7 @@ python publish.py --dry-run
 
 ### 1. Create the plist
 
-Save as `~/Library/LaunchAgents/com.briefing.robotics.plist`:
+Save as `~/Library/LaunchAgents/com.briefing.TOPIC.plist`, replacing `YOUR_USER` with your username (`whoami`):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -192,13 +212,12 @@ Save as `~/Library/LaunchAgents/com.briefing.robotics.plist`:
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.briefing.robotics</string>
+    <string>com.briefing.TOPIC</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
-        <string>robotics</string>
-        <string>x</string>
+        <string>TOPIC</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -210,9 +229,9 @@ Save as `~/Library/LaunchAgents/com.briefing.robotics.plist`:
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/briefing.log</string>
+    <string>/Users/YOUR_USER/projects/briefing/output/TOPIC.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/briefing.error.log</string>
+    <string>/Users/YOUR_USER/projects/briefing/output/TOPIC.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -223,28 +242,25 @@ Save as `~/Library/LaunchAgents/com.briefing.robotics.plist`:
 </plist>
 ```
 
-Replace `YOUR_USER` and adjust the `Hour`/`Minute` to your preferred schedule.
-
 ### 2. Load and test
 
 ```bash
 # Load the job
-launchctl load ~/Library/LaunchAgents/com.briefing.robotics.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.briefing.TOPIC.plist
 
-# Run it immediately to test
-launchctl start com.briefing.robotics
+# Verify it's loaded
+launchctl list | grep briefing
+
+# Run immediately to test
+launchctl start com.briefing.TOPIC
 
 # Check logs
-tail -f output/briefing.log
-tail -f output/briefing.error.log
-
-# Unload if you need to edit the plist
-launchctl unload ~/Library/LaunchAgents/com.briefing.robotics.plist
+tail -f ~/projects/briefing/output/TOPIC.log
 ```
 
 ### Example: morning briefing + hourly tweet (UK capital markets)
 
-Both plists use the same config. `publish.py` (no dest arg) publishes everything at 7am; `publish.py x` on the hourly runs publishes X only — the narrative stays in the outbox undelivered until it's already been sent at 7am.
+Both plists use the same config. `publish.py` (no dest arg) publishes everything at 7am; `publish.py x` on the hourly runs publishes X only — the narrative stays in the outbox until 7am.
 
 **`com.briefing.uk_capital_markets.plist`** — 7am daily (narrative→Telegram + tweet→X):
 
@@ -305,15 +321,42 @@ Both plists use the same config. `publish.py` (no dest arg) publishes everything
 
     <key>StartCalendarInterval</key>
     <array>
-        <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>14</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+        <dict>
+            <key>Hour</key><integer>8</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>9</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>10</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>11</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>12</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>13</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>14</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>15</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>16</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
     </array>
 
     <key>StandardOutPath</key>
@@ -330,19 +373,21 @@ Both plists use the same config. `publish.py` (no dest arg) publishes everything
 </plist>
 ```
 
-> launchd doesn't support a simple "every hour" interval with `StartCalendarInterval` — you list each hour explicitly. The above covers 8am–4pm (market hours). Adjust as needed.
+> launchd doesn't support a simple "every hour" interval — you list each hour explicitly. The above covers 8am–4pm (market hours).
 
 ### Notes
 
 - launchd runs jobs as your user, so credentials in `.env` are picked up normally
 - If the machine is asleep at the scheduled time, the job is skipped — it does not catch up on wake
 - publish.py is safe to run independently at any time; it skips already-published outbox entries
+- If the outbox accumulates stale entries (e.g. after testing), clear them: `sqlite3 output/briefings.db "UPDATE outbox SET published_at=datetime('now') WHERE published_at IS NULL;"`
 
 ## Output structure
 
 ```text
 output/
   briefings.db                          # SQLite — all runs, outputs, and outbox
+  .x_session.json                       # X session cookies (created by login_x.py)
   2026-03-14_12-00-00_robotics/
     raw_briefing.txt                    # formatted headlines (HTML)
     narrative.txt                       # AI narrative output
