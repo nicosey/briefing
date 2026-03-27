@@ -159,6 +159,14 @@ class XDelivery(Delivery):
                 post_btn.click()
                 page.wait_for_timeout(3000)
 
+                # Check for duplicate content error
+                duplicate = page.locator('text="already said that"').is_visible() or \
+                            page.locator('[data-testid="toast"]').filter(has_text="duplicate").is_visible()
+                if duplicate:
+                    log("  ℹ X: duplicate tweet — already posted, marking done")
+                    browser.close()
+                    return True
+
                 # Persist session cookies
                 os.makedirs(os.path.dirname(self.session_file) or ".", exist_ok=True)
                 with open(self.session_file, "w") as f:
