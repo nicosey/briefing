@@ -158,25 +158,22 @@ class XDelivery(Delivery):
                 post_btn.wait_for(timeout=10000)
                 page.wait_for_timeout(500)
                 post_btn.evaluate("el => el.click()")
-                page.wait_for_timeout(6000)
 
-                # Check for duplicate content error
-                duplicate = page.locator('text="already said that"').is_visible() or \
-                            page.locator('[data-testid="toast"]').filter(has_text="duplicate").is_visible()
-                if duplicate:
-                    log("  ℹ X: duplicate tweet — already posted, marking done")
-                    browser.close()
-                    return True
-
-                # Check for any error toast (ignore success toasts)
-                error_toast = page.locator('[data-testid="toast"]')
-                if error_toast.is_visible():
-                    msg = error_toast.inner_text()
+                # Wait for toast confirmation — mandatory
+                toast = page.locator('[data-testid="toast"]')
+                try:
+                    toast.wait_for(timeout=10000)
+                    msg = toast.inner_text()
                     if "sent" in msg.lower() or "posted" in msg.lower():
                         log(f"  ✅ X: posted (confirmed via toast)")
+                    elif "duplicate" in msg.lower() or "already said" in msg.lower():
+                        log(f"  ℹ X: duplicate — already posted, marking done")
+                    else:
+                        log(f"  ❌ X: post rejected — {msg}")
                         browser.close()
-                        return True
-                    log(f"  ❌ X: post rejected — {msg}")
+                        return False
+                except PWTimeout:
+                    log(f"  ❌ X: no confirmation toast — post likely failed")
                     browser.close()
                     return False
 
