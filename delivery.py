@@ -157,7 +157,7 @@ class XDelivery(Delivery):
                 ).first
                 editor.click()
                 page.wait_for_timeout(500)
-                page.keyboard.press("Control+Return")
+                page.keyboard.press("Meta+Return")
 
                 # Wait for toast confirmation — mandatory
                 toast = page.locator('[data-testid="toast"]')
