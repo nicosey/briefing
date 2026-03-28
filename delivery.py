@@ -5,7 +5,6 @@ import urllib.request
 
 from config import (
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    TWITTER_USERNAME, TWITTER_PASSWORD, TWITTER_HEADLESS, TWITTER_SESSION,
     log,
 )
 
@@ -69,174 +68,6 @@ class TelegramDelivery(Delivery):
             self.send(current)
 
 
-# ── x (twitter) ──────────────────────────────────────────────
-
-class XDelivery(Delivery):
-    """Posts tweet-sized messages to X via Playwright browser automation.
-
-    Messages longer than MAX_CHARS are silently skipped — so only the
-    'tweet' output type (≤280 chars) will actually be posted.
-
-    Requires: pip install playwright && playwright install chromium
-    Credentials: TWITTER_USERNAME / TWITTER_PASSWORD in .env
-    Session: cookies saved after first login and reused on subsequent runs
-    Headless: set TWITTER_HEADLESS=false to watch the browser (useful for debugging)
-    """
-    MAX_CHARS = 280
-
-    def __init__(self, username, password, headless=True, session_file=TWITTER_SESSION):
-        self.username     = username
-        self.password     = password
-        self.headless     = headless
-        self.session_file = session_file
-
-    def send(self, message):
-        if len(message) > self.MAX_CHARS:
-            log(f"  ℹ X: skipping ({len(message)} chars > {self.MAX_CHARS})")
-            return False
-
-        try:
-            from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
-        except ImportError:
-            log("  ❌ X: playwright not installed.")
-            log("     Run: pip install playwright && playwright install chromium")
-            return False
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=self.headless,
-                args=["--disable-blink-features=AutomationControlled"],
-            )
-            ctx_kwargs = dict(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/123.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-            )
-            # Restore full session state (cookies + localStorage) if available
-            if os.path.isfile(self.session_file):
-                ctx_kwargs["storage_state"] = self.session_file
-                log("  ℹ X: loaded saved session")
-            context = browser.new_context(**ctx_kwargs)
-
-            page = context.new_page()
-
-            try:
-                log("  ℹ X: navigating to compose...")
-                page.goto("https://x.com/compose/tweet", timeout=30000)
-                page.wait_for_load_state("domcontentloaded", timeout=20000)
-                page.wait_for_timeout(2000)
-                log(f"  ℹ X: landed on {page.url}")
-
-                # Login if redirected away from compose
-                if "login" in page.url or page.url.rstrip("/") in ("https://x.com", "https://twitter.com"):
-                    if not self._login(page):
-                        browser.close()
-                        return False
-                    log("  ℹ X: navigating to compose after login...")
-                    page.goto("https://x.com/compose/tweet", timeout=30000)
-                    page.wait_for_load_state("domcontentloaded", timeout=20000)
-                    page.wait_for_timeout(2000)
-                    log(f"  ℹ X: landed on {page.url}")
-
-                # Type into the compose box
-                log("  ℹ X: waiting for compose box...")
-                editor = page.locator('[data-testid="tweetTextarea_0"]').first
-                editor.wait_for(timeout=15000)
-                editor.click()
-                page.keyboard.type(message, delay=30)
-
-                # Post — press on the element directly so it definitely has focus
-                log("  ℹ X: submitting post...")
-                editor.focus()
-                page.wait_for_timeout(500)
-                editor.press("Meta+Return")
-
-                # Fallback: JS-click the post button if no toast after 5 s
-                toast = page.locator('[data-testid="toast"]')
-                try:
-                    toast.wait_for(timeout=5000)
-                except PWTimeout:
-                    log("  ℹ X: keyboard shortcut may not have fired — trying button click...")
-                    post_btn = page.locator(
-                        '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
-                    ).first
-                    post_btn.evaluate("el => el.click()")
-                    page.wait_for_timeout(500)
-
-                # Confirm via toast — the first wait above may have already caught it;
-                # wait again (short) to make sure we read the message
-                try:
-                    toast.wait_for(timeout=8000)
-                    msg = toast.inner_text()
-                    if "sent" in msg.lower() or "posted" in msg.lower():
-                        log(f"  ✅ X: posted (confirmed via toast)")
-                    elif "duplicate" in msg.lower() or "already said" in msg.lower():
-                        log(f"  ℹ X: duplicate — already posted, marking done")
-                    else:
-                        log(f"  ❌ X: post rejected — {msg}")
-                        browser.close()
-                        return False
-                except PWTimeout:
-                    log(f"  ❌ X: no confirmation toast — post likely failed")
-                    browser.close()
-                    return False
-
-                # Persist full session state (cookies + localStorage)
-                os.makedirs(os.path.dirname(self.session_file) or ".", exist_ok=True)
-                context.storage_state(path=self.session_file)
-
-                log("  ✅ X: posted")
-                browser.close()
-                return True
-
-            except PWTimeout:
-                log("  ❌ X: timed out waiting for page element")
-                browser.close()
-                return False
-            except Exception as e:
-                log(f"  ❌ X: {e}")
-                browser.close()
-                return False
-
-    def _login(self, page):
-        log("  ℹ X: logging in...")
-        try:
-            page.goto("https://x.com/login", timeout=30000)
-            page.wait_for_load_state("domcontentloaded", timeout=20000)
-
-            log("  ℹ X: entering username...")
-            page.locator('input[autocomplete="username"]').fill(self.username)
-            page.keyboard.press("Enter")
-            page.wait_for_timeout(2000)
-            log(f"  ℹ X: after username, url={page.url}")
-
-            # X sometimes asks for email/phone verification before password
-            if page.locator('input[data-testid="ocfEnterTextTextInput"]').is_visible():
-                log("  ℹ X: identity verification step — entering username again...")
-                page.locator('input[data-testid="ocfEnterTextTextInput"]').fill(self.username)
-                page.keyboard.press("Enter")
-                page.wait_for_timeout(2000)
-
-            log("  ℹ X: entering password...")
-            page.locator('input[name="password"]').wait_for(timeout=10000)
-            page.locator('input[name="password"]').fill(self.password)
-            page.keyboard.press("Enter")
-            page.wait_for_load_state("domcontentloaded", timeout=20000)
-            page.wait_for_timeout(2000)
-            log(f"  ℹ X: after password, url={page.url}")
-
-            if "login" in page.url:
-                log("  ❌ X: login failed — check X_USERNAME / X_PASSWORD in .env")
-                return False
-
-            log("  ✅ X: logged in")
-            return True
-        except Exception as e:
-            log(f"  ❌ X: login error: {e}")
-            return False
-
-
 # ── console ──────────────────────────────────────────────────
 
 class ConsoleDelivery(Delivery):
@@ -270,11 +101,6 @@ REGISTRY = {
     "telegram": lambda cfg: TelegramDelivery(
         token   = TELEGRAM_BOT_TOKEN,
         chat_id = cfg.get("telegram_chat_id", TELEGRAM_CHAT_ID),
-    ),
-    "x": lambda cfg: XDelivery(
-        username = TWITTER_USERNAME,
-        password = TWITTER_PASSWORD,
-        headless = TWITTER_HEADLESS,
     ),
     "console": lambda cfg: ConsoleDelivery(),
 }

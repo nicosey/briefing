@@ -1,13 +1,13 @@
 # briefing
 
-A lightweight daily news briefing pipeline. Searches for recent news via [SearXNG](https://github.com/searxng/searxng), generates AI outputs via [Ollama](https://ollama.com), saves to SQLite, and publishes to Telegram and/or X.
+A lightweight daily news briefing pipeline. Searches for recent news via [SearXNG](https://github.com/searxng/searxng), generates AI outputs via [Ollama](https://ollama.com), saves to SQLite, and publishes to Telegram.
 
 ## How it works
 
 1. **Search** — runs a set of queries against a local SearXNG instance
 2. **Generate** — feeds the results to a local Ollama model to produce each configured output (e.g. narrative, tweet)
 3. **Save** — stores results in SQLite + a timestamped folder under `output/`, and queues outputs in an outbox per destination
-4. **Publish** — a separate `publish.py` script reads the outbox and delivers to each destination (Telegram, X, console)
+4. **Publish** — a separate `publish.py` script reads the outbox and delivers to each destination (Telegram, console)
 5. **Aggregate** *(optional)* — injects recent saved summaries as context so the AI can track trends across runs
 
 ## Requirements
@@ -16,15 +16,14 @@ A lightweight daily news briefing pipeline. Searches for recent news via [SearXN
 - [SearXNG](https://github.com/searxng/searxng) running locally
 - [Ollama](https://ollama.com) running locally with a model pulled
 - For Telegram delivery: a bot token and chat ID
-- For X delivery: `pip install playwright && playwright install chromium`, plus X credentials
+
+No third-party Python packages required — uses only the standard library.
 
 ## Setup
 
 ```bash
 cp .env.example .env
 # edit .env with your values
-pip3 install -r requirements.txt
-playwright install chromium
 ```
 
 ### .env
@@ -38,26 +37,9 @@ OLLAMA_MODEL=qwen3-coder:30b
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 
-# X / Twitter (optional)
-X_USERNAME=your_username
-X_PASSWORD=your_password
-X_HEADLESS=false
-
 # Default outbox destination for outputs without an explicit dest (default: console)
 BRIEFING_DEST=telegram
 ```
-
-> **X note:** Set `X_HEADLESS=false` — X detects and blocks headless Chromium. On a headless server this requires a virtual display (e.g. Xvfb).
-
-### First-time X login
-
-Run this once to save a session so automated posting works without logging in each time:
-
-```bash
-python3 login_x.py
-```
-
-A browser window opens — log in manually (handles CAPTCHAs and 2FA), then press Enter. The session is saved to `output/.x_session.json` and reused on all future runs. Re-run `login_x.py` if the session expires.
 
 ## Usage
 
@@ -70,7 +52,6 @@ python publish.py
 
 # Publish to a specific destination only
 python publish.py telegram
-python publish.py x
 
 # Preview without publishing (dry run)
 python publish.py --dry-run
@@ -108,18 +89,17 @@ python briefing.py robotics && python publish.py
 | --- | --- |
 | `console` | Print to terminal |
 | `telegram` | Send to a Telegram chat via bot API |
-| `x` | Post to X via Playwright browser automation |
 
 Set `BRIEFING_DEST` in `.env` as the default, or set `dest` per output in the topic config:
 
 ```json
 "outputs": [
-  {"type": "narrative", "name": "Daily Digest",  "dest": "telegram"},
-  {"type": "tweet",     "name": "Tweet Summary", "dest": "x"}
+  {"type": "narrative", "name": "Daily Digest",   "dest": "telegram"},
+  {"type": "tweet",     "name": "Tweet Summary",  "dest": "telegram"}
 ]
 ```
 
-Comma-separate to send one output to multiple destinations: `"dest": "telegram,x"`.
+Comma-separate to send one output to multiple destinations: `"dest": "telegram,console"`.
 
 ## Output types
 
@@ -137,7 +117,7 @@ Each topic config defines an `outputs` array controlling what the AI generates p
 | `narrative` | 3–4 paragraph analysis, up to `max_words` |
 | `tweet` | Single breaking-news sentence, up to `max_chars`. Looks back at recent tweets to avoid repeating the same story |
 
-**Tweet deduplication:** The `tweet_lookback_hours` field (default: 6) controls how far back the AI looks when avoiding repeated stories. Increase it for less frequent runs, decrease it if stories change quickly.
+**Tweet deduplication:** The `tweet_lookback_hours` field (default: 6) controls how far back the AI looks when avoiding repeated stories.
 
 **Latest news focus:** Name a search section with "latest" in the title (e.g. `LATEST UK CAPITAL MARKETS NEWS`) and the tweet will draw exclusively from that section.
 
@@ -181,7 +161,7 @@ Create a JSON file in `config/`:
   "lookback_minutes": 120,
   "outputs": [
     {"type": "narrative", "name": "Daily Digest",  "max_words": 500, "dest": "telegram"},
-    {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "x", "tweet_lookback_hours": 6}
+    {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "telegram", "tweet_lookback_hours": 6}
   ],
   "searches": [
     {"emoji": "📰", "title": "LATEST MY TOPIC NEWS", "query": "my topic news today", "count": 5, "category": "news"},
@@ -199,7 +179,7 @@ python publish.py --dry-run
 
 ## Scheduling on macOS (launchd)
 
-`run.sh` wraps briefing + publish in a single script so launchd only needs one job. publish.py only fires if briefing.py exits successfully (`set -e` in the script handles this).
+`run.sh` wraps briefing + publish in a single script so launchd only needs one job.
 
 ### 1. Create the plist
 
@@ -258,123 +238,6 @@ launchctl start com.briefing.TOPIC
 tail -f ~/projects/briefing/output/TOPIC.log
 ```
 
-### Example: morning briefing + hourly tweet (UK capital markets)
-
-Both plists use the same config. `publish.py` (no dest arg) publishes everything at 7am; `publish.py x` on the hourly runs publishes X only — the narrative stays in the outbox until 7am.
-
-**`com.briefing.uk_capital_markets.plist`** — 7am daily (narrative→Telegram + tweet→X):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.briefing.uk_capital_markets</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
-        <string>uk_capital_markets</string>
-    </array>
-
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>7</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets.error.log</string>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
-</dict>
-</plist>
-```
-
-**`com.briefing.uk_capital_markets_hourly.plist`** — hourly tweet→X (same config, X only):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.briefing.uk_capital_markets_hourly</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USER/projects/briefing/run.sh</string>
-        <string>uk_capital_markets</string>
-        <string>x</string>
-    </array>
-
-    <key>StartCalendarInterval</key>
-    <array>
-        <dict>
-            <key>Hour</key><integer>8</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>9</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>10</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>11</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>12</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>13</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>14</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>15</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-        <dict>
-            <key>Hour</key><integer>16</integer>
-            <key>Minute</key><integer>0</integer>
-        </dict>
-    </array>
-
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_hourly.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USER/projects/briefing/output/uk_capital_markets_hourly.error.log</string>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
-</dict>
-</plist>
-```
-
-> launchd doesn't support a simple "every hour" interval — you list each hour explicitly. The above covers 8am–4pm (market hours).
-
 ### Notes
 
 - launchd runs jobs as your user, so credentials in `.env` are picked up normally
@@ -387,7 +250,6 @@ Both plists use the same config. `publish.py` (no dest arg) publishes everything
 ```text
 output/
   briefings.db                          # SQLite — all runs, outputs, and outbox
-  .x_session.json                       # X session cookies (created by login_x.py)
   2026-03-14_12-00-00_robotics/
     raw_briefing.txt                    # formatted headlines (HTML)
     narrative.txt                       # AI narrative output

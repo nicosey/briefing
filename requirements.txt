@@ -1,1 +1,3 @@
-playwright
+# No third-party packages required.
+# All dependencies (urllib, sqlite3, json, os) are part of the Python standard library.
+# For X delivery via API (optional, not currently implemented): pip install requests

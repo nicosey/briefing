@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python briefing.py robotics --mock --dry-run --save)",
+      "Bash(sqlite3 output/briefings.db \"SELECT timestamp, topic, length\\(narrative\\) as narrative_chars, aggregated_from, aggregated FROM runs;\")"
+    ]
+  }
+}
