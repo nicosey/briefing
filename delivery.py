@@ -155,10 +155,9 @@ class XDelivery(Delivery):
                 post_btn = page.locator(
                     '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
                 ).first
-                post_btn.wait_for(timeout=10000)
                 editor.click()
                 page.wait_for_timeout(500)
-                post_btn.click(force=True)
+                page.keyboard.press("Control+Return")
 
                 # Wait for toast confirmation — mandatory
                 toast = page.locator('[data-testid="toast"]')
