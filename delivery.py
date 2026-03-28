@@ -150,19 +150,28 @@ class XDelivery(Delivery):
                 editor.click()
                 page.keyboard.type(message, delay=30)
 
-                # Post — try both old and new button testids
-                log("  ℹ X: clicking post...")
-                post_btn = page.locator(
-                    '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
-                ).first
-                editor.click()
+                # Post — press on the element directly so it definitely has focus
+                log("  ℹ X: submitting post...")
+                editor.focus()
                 page.wait_for_timeout(500)
-                page.keyboard.press("Meta+Return")
+                editor.press("Meta+Return")
 
-                # Wait for toast confirmation — mandatory
+                # Fallback: JS-click the post button if no toast after 5 s
                 toast = page.locator('[data-testid="toast"]')
                 try:
-                    toast.wait_for(timeout=10000)
+                    toast.wait_for(timeout=5000)
+                except PWTimeout:
+                    log("  ℹ X: keyboard shortcut may not have fired — trying button click...")
+                    post_btn = page.locator(
+                        '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]'
+                    ).first
+                    post_btn.evaluate("el => el.click()")
+                    page.wait_for_timeout(500)
+
+                # Confirm via toast — the first wait above may have already caught it;
+                # wait again (short) to make sure we read the message
+                try:
+                    toast.wait_for(timeout=8000)
                     msg = toast.inner_text()
                     if "sent" in msg.lower() or "posted" in msg.lower():
                         log(f"  ✅ X: posted (confirmed via toast)")
