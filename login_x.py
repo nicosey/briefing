@@ -5,7 +5,6 @@ CAPTCHAs, 2FA, and any other challenges automatically).
 Once you're logged in, press Enter in the terminal to save the session.
 """
 import os
-import json
 from config import TWITTER_SESSION, log
 
 try:
@@ -35,8 +34,7 @@ with sync_playwright() as p:
     input("Press Enter when logged in → ")
 
     os.makedirs(os.path.dirname(TWITTER_SESSION) or ".", exist_ok=True)
-    with open(TWITTER_SESSION, "w") as f:
-        json.dump(context.cookies(), f)
+    context.storage_state(path=TWITTER_SESSION)
 
     log(f"✅ Session saved to {TWITTER_SESSION}")
     browser.close()

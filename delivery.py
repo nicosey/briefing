@@ -107,21 +107,17 @@ class XDelivery(Delivery):
                 headless=self.headless,
                 args=["--disable-blink-features=AutomationControlled"],
             )
-            context = browser.new_context(
+            ctx_kwargs = dict(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
                            "Chrome/123.0.0.0 Safari/537.36",
                 viewport={"width": 1280, "height": 800},
             )
-
-            # Restore saved session if available
+            # Restore full session state (cookies + localStorage) if available
             if os.path.isfile(self.session_file):
-                try:
-                    with open(self.session_file) as f:
-                        context.add_cookies(json.load(f))
-                    log("  ℹ X: loaded saved session")
-                except Exception:
-                    pass
+                ctx_kwargs["storage_state"] = self.session_file
+                log("  ℹ X: loaded saved session")
+            context = browser.new_context(**ctx_kwargs)
 
             page = context.new_page()
 
@@ -186,10 +182,9 @@ class XDelivery(Delivery):
                     browser.close()
                     return False
 
-                # Persist session cookies
+                # Persist full session state (cookies + localStorage)
                 os.makedirs(os.path.dirname(self.session_file) or ".", exist_ok=True)
-                with open(self.session_file, "w") as f:
-                    json.dump(context.cookies(), f)
+                context.storage_state(path=self.session_file)
 
                 log("  ✅ X: posted")
                 browser.close()
