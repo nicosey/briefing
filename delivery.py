@@ -157,7 +157,7 @@ class XDelivery(Delivery):
                 ).first
                 post_btn.wait_for(timeout=10000)
                 page.wait_for_timeout(500)
-                post_btn.evaluate("el => el.click()")
+                post_btn.click()
 
                 # Wait for toast confirmation — mandatory
                 toast = page.locator('[data-testid="toast"]')
