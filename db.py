@@ -141,11 +141,11 @@ def get_pending_outbox(dest=None):
 
 
 def cleanup_outbox(max_age_hours=24):
-    """Delete outbox entries older than max_age_hours."""
+    """Delete published outbox entries older than max_age_hours."""
     def _():
         con = _connect()
         cur = con.execute(
-            "DELETE FROM outbox WHERE created_at < datetime('now', ?)",
+            "DELETE FROM outbox WHERE published_at IS NOT NULL AND created_at < datetime('now', ?)",
             (f"-{max_age_hours} hours",)
         )
         count = cur.rowcount
