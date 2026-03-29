@@ -3,6 +3,21 @@ from datetime import datetime
 from config import OLLAMA_MODEL
 
 
+def _unicode_bold(text):
+    """Convert ASCII letters/digits to Unicode bold sans-serif — renders on X."""
+    result = []
+    for c in text:
+        if 'A' <= c <= 'Z':
+            result.append(chr(0x1D5D4 + ord(c) - ord('A')))
+        elif 'a' <= c <= 'z':
+            result.append(chr(0x1D5EE + ord(c) - ord('a')))
+        elif '0' <= c <= '9':
+            result.append(chr(0x1D7EC + ord(c) - ord('0')))
+        else:
+            result.append(c)
+    return ''.join(result)
+
+
 def truncate(text, max_len=120):
     text = text.strip()
     if len(text) <= max_len:
@@ -40,7 +55,10 @@ def build_output_message(content, output_cfg, cfg):
     output_type = output_cfg.get("type", "narrative")
 
     if output_type == "tweet":
-        return f'{cfg["header_emoji"]} {content}'
+        title = cfg.get("briefing_title", "")
+        if title:
+            return f'{_unicode_bold(title)}\n\n{content}'
+        return content
 
     # narrative (default)
     now   = datetime.now()
