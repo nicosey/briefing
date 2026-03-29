@@ -52,17 +52,20 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
 
 def main():
     raw_args = sys.argv[1:]
-    mock     = "--mock"     in raw_args
-    dry_run  = "--dry-run"  in raw_args
-    full_day = "--full-day" in raw_args
+    mock          = "--mock"     in raw_args
+    dry_run       = "--dry-run"  in raw_args
+    full_day      = "--full-day" in raw_args
 
-    lookback = 0
+    lookback      = 0
+    briefing_type = None
     for i, a in enumerate(raw_args):
         if a == "--lookback" and i + 1 < len(raw_args):
             try:
                 lookback = int(raw_args[i + 1])
             except ValueError:
                 pass
+        if a == "--briefing-type" and i + 1 < len(raw_args):
+            briefing_type = raw_args[i + 1]
 
     args = []
     skip_next = False
@@ -70,7 +73,7 @@ def main():
         if skip_next:
             skip_next = False
             continue
-        if a == "--lookback":
+        if a in ("--lookback", "--briefing-type"):
             skip_next = True
             continue
         if a.startswith("--"):
@@ -89,6 +92,15 @@ def main():
 
     topic = args[0]
     cfg   = load_topic_config(topic)
+
+    # Apply briefing type overrides (title + AI instruction)
+    if briefing_type:
+        bt = cfg.get("briefing_types", {}).get(briefing_type)
+        if bt:
+            cfg["briefing_title"]       = bt.get("title", cfg["ai_topic"])
+            cfg["briefing_instruction"] = bt.get("ai_instruction", "")
+        else:
+            log(f"⚠ Unknown briefing type '{briefing_type}' — using defaults")
 
     if lookback == 0:
         lookback = cfg.get("lookback_minutes", 0)

@@ -33,6 +33,10 @@ def _narrative_prompt(output_cfg, results_data, cfg, previous_narratives):
 
     max_words = output_cfg.get("max_words", 500)
 
+    briefing_instruction = cfg.get("briefing_instruction", "")
+    if briefing_instruction:
+        briefing_instruction = f"- {briefing_instruction}\n"
+
     return f"""/no_think
 You are {cfg['ai_persona']}.
 Based on today's news below, write a concise, engaging narrative summary called "{cfg['ai_topic']}".
@@ -46,7 +50,7 @@ Rules:
 - Write in a professional but accessible tone
 - Do NOT use markdown formatting, just plain text
 - End with one sentence on what to watch next
-{agg_instruction}
+{briefing_instruction}{agg_instruction}
 {history_block}TODAY'S RAW NEWS DATA:
 {_results_text(results_data)}
 

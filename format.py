@@ -43,10 +43,11 @@ def build_output_message(content, output_cfg, cfg):
         return f'{cfg["header_emoji"]} {content}'
 
     # narrative (default)
-    now = datetime.now()
+    now   = datetime.now()
+    title = cfg.get("briefing_title", cfg["ai_topic"])
     return (
-        f'{cfg["header_emoji"]} <b>{cfg["ai_topic"].upper()}</b>\n'
-        f'📅 {now.strftime("%A, %d %B %Y")}\n'
+        f'{cfg["header_emoji"]} <b>{title.upper()}</b>\n'
+        f'📅 {now.strftime("%A, %d %B %Y")} • {now.strftime("%H:%M")}\n'
         f'{"─" * 30}\n\n'
         f'{content}\n\n'
         f'{"─" * 30}\n'

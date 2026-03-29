@@ -5,6 +5,20 @@
   "ai_persona": "a senior UK capital markets analyst writing a daily morning briefing for institutional clients",
   "ai_topic": "Today's UK Capital Markets Digest",
   "lookback_minutes": 120,
+  "briefing_types": {
+    "morning": {
+      "title": "Morning Start",
+      "ai_instruction": "Set the scene for the trading day ahead — what are the key themes and early movers to watch?"
+    },
+    "midday": {
+      "title": "Mid Day Update",
+      "ai_instruction": "Summarise how markets have developed through the morning and what has changed since the open."
+    },
+    "eod": {
+      "title": "End of Day Summary",
+      "ai_instruction": "Wrap up the full trading day — what were the defining stories, how did markets close, and what should we watch tomorrow?"
+    }
+  },
   "outputs": [
     {"type": "narrative", "name": "Daily Digest",  "max_words": 500, "dest": "telegram"},
     {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "telegram"}
