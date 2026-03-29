@@ -59,6 +59,14 @@ def init_db():
                 FOREIGN KEY(output_id) REFERENCES outputs(id)
             )
         """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS collections (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                topic     TEXT NOT NULL,
+                results   TEXT NOT NULL
+            )
+        """)
         con.commit()
         con.close()
     _db_op(_)
@@ -223,4 +231,81 @@ def mark_aggregated(timestamps):
         )
         con.commit()
         con.close()
+    _db_op(_)
+
+
+def save_collection(topic, results):
+    """Save a set of search results to the collections table."""
+    def _():
+        con = _connect()
+        con.execute(
+            "INSERT INTO collections (timestamp, topic, results) VALUES (?, ?, ?)",
+            (datetime.now().isoformat(timespec="seconds"), topic, json.dumps(results))
+        )
+        con.commit()
+        con.close()
+        log(f"  🗄  DB: saved collection for {topic}")
+    _db_op(_)
+
+
+def get_collections(topic, since_timestamp):
+    """Return merged, deduplicated results_data from all collections since since_timestamp."""
+    def _():
+        con = _connect()
+        rows = con.execute(
+            "SELECT results FROM collections WHERE topic=? AND timestamp>=? ORDER BY timestamp",
+            (topic, since_timestamp)
+        ).fetchall()
+        con.close()
+        return [json.loads(row[0]) for row in rows]
+
+    all_collections = _db_op(_)
+    if not all_collections:
+        return []
+
+    # Merge sections across all collections, deduplicate by URL
+    merged = {}
+    seen_urls = set()
+    for collection in all_collections:
+        for section in collection:
+            name = section["section"]
+            if name not in merged:
+                merged[name] = {"section": name, "emoji": section.get("emoji", ""), "results": []}
+            for result in section["results"]:
+                url = result.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    merged[name]["results"].append(result)
+                elif not url:
+                    merged[name]["results"].append(result)
+
+    return list(merged.values())
+
+
+def get_last_run_timestamp(topic):
+    """Return the timestamp of the most recent briefing run for this topic, or None."""
+    def _():
+        con = _connect()
+        row = con.execute(
+            "SELECT timestamp FROM runs WHERE topic=? ORDER BY timestamp DESC LIMIT 1",
+            (topic,)
+        ).fetchone()
+        con.close()
+        return row[0] if row else None
+    return _db_op(_)
+
+
+def cleanup_collections(max_age_hours=48):
+    """Delete collection entries older than max_age_hours."""
+    def _():
+        con = _connect()
+        cur = con.execute(
+            "DELETE FROM collections WHERE timestamp < datetime('now', ?)",
+            (f"-{max_age_hours} hours",)
+        )
+        count = cur.rowcount
+        con.commit()
+        con.close()
+        if count:
+            log(f"  🗄  DB: cleaned up {count} old collection(s)")
     _db_op(_)

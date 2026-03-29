@@ -10,7 +10,9 @@ from config import (
     SEARXNG_URL, OLLAMA_URL,
     log, load_topic_config
 )
-from db        import init_db, save_run, save_output, add_to_outbox, find_recent_runs, find_recent_tweets, mark_aggregated
+from db        import (init_db, save_run, save_output, add_to_outbox,
+                       find_recent_runs, find_recent_tweets, mark_aggregated,
+                       get_collections, get_last_run_timestamp)
 from search    import fetch_all_results, mock_fetch_results
 from ai        import generate_output, mock_output
 from format    import build_raw_briefing, build_output_message
@@ -50,8 +52,9 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
 
 def main():
     raw_args = sys.argv[1:]
-    mock    = "--mock"    in raw_args
-    dry_run = "--dry-run" in raw_args
+    mock     = "--mock"     in raw_args
+    dry_run  = "--dry-run"  in raw_args
+    full_day = "--full-day" in raw_args
 
     lookback = 0
     for i, a in enumerate(raw_args):
@@ -100,23 +103,52 @@ def main():
 
     log("=" * 40)
     log(cfg["title"]
-        + (" [MOCK]"                if mock              else "")
-        + (" [DRY RUN]"             if dry_run           else "")
-        + (f" [LOOKBACK {lookback}m]" if lookback        else ""))
+        + (" [MOCK]"                  if mock              else "")
+        + (" [DRY RUN]"               if dry_run           else "")
+        + (" [FULL DAY]"              if full_day          else "")
+        + (f" [LOOKBACK {lookback}m]" if lookback          else ""))
     log("=" * 40)
 
+    if not dry_run:
+        init_db()
+
+    # Determine data source: collected results from DB, or live search
+    results_data = None
+    using_collections = False
+
     if mock:
-        log("⚠  Mock mode — skipping SearXNG and Ollama")
+        log("⚠  Mock mode — using mock search results")
         ollama_available = True
     else:
-        try:
-            req = urllib.request.Request(f"{SEARXNG_URL}/search?q=test&format=json")
-            req.add_header("User-Agent", "DailyBriefing/1.0")
-            urllib.request.urlopen(req, timeout=10)
-            log("✅ SearXNG: OK")
-        except Exception:
-            log("❌ SearXNG not reachable")
-            sys.exit(1)
+        # Try to use hourly-collected data if available
+        if not dry_run:
+            if full_day:
+                # Look back to midnight today for end-of-day summary
+                since = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
+                log(f"📦 Full-day mode — loading collections since midnight...")
+            else:
+                last_run = get_last_run_timestamp(topic)
+                since = last_run or datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
+                log(f"📦 Loading collections since {since[:16]}...")
+
+            collected = get_collections(topic, since)
+            if collected:
+                results_data = collected
+                using_collections = True
+                total = sum(len(s["results"]) for s in results_data)
+                log(f"  ✅ {len(results_data)} sections, {total} articles from collected data")
+            else:
+                log("  ℹ No collections found — falling back to live search")
+
+        if not using_collections:
+            try:
+                req = urllib.request.Request(f"{SEARXNG_URL}/search?q=test&format=json")
+                req.add_header("User-Agent", "DailyBriefing/1.0")
+                urllib.request.urlopen(req, timeout=10)
+                log("✅ SearXNG: OK")
+            except Exception:
+                log("❌ SearXNG not reachable")
+                sys.exit(1)
 
         try:
             urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5)
@@ -128,9 +160,6 @@ def main():
 
     log("")
 
-    if not dry_run:
-        init_db()
-
     previous_narratives = []
     if lookback and not dry_run:
         previous_narratives = find_recent_runs(topic, lookback)
@@ -138,11 +167,12 @@ def main():
             log(f"📚 Found {len(previous_narratives)} previous summary(s) to aggregate")
         else:
             log("📚 No recent summaries found — starting fresh")
-    log("")
+        log("")
 
-    log("📡 Fetching search results...")
-    results_data = mock_fetch_results(cfg["searches"]) if mock else fetch_all_results(cfg["searches"])
-    log("")
+    if results_data is None:
+        log("📡 Fetching search results...")
+        results_data = mock_fetch_results(cfg["searches"]) if mock else fetch_all_results(cfg["searches"])
+        log("")
 
     raw_briefing = build_raw_briefing(results_data, cfg)
     log(f"📋 Raw briefing: {len(raw_briefing)} chars")
