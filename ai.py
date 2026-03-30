@@ -57,42 +57,39 @@ Rules:
 Write the narrative now:"""
 
 
-def _thread_prompt(output_cfg, results_data, cfg, previous_tweets=None):
+def _thread_prompt(output_cfg, results_data, cfg, previous_tweets=None, source_content=None):
     num_posts  = output_cfg.get("num_posts", 4)
     max_chars  = output_cfg.get("max_chars_per_post", 280)
     numbered   = output_cfg.get("numbered", True)
     numbering  = f"- Start each post with its position, e.g. '1/{num_posts}', '2/{num_posts}'\n" if numbered else ""
 
-    latest_sections = [s for s in results_data if "latest" in s["section"].lower()]
-    feed = latest_sections if latest_sections else results_data
-
-    recent_block = ""
-    if previous_tweets:
-        recent_block = "\nRECENT POSTS ALREADY MADE (do NOT repeat these stories):\n"
-        for t in previous_tweets:
-            recent_block += f"- {t}\n"
-        recent_block += "\n"
-
     briefing_instruction = cfg.get("briefing_instruction", "")
     if briefing_instruction:
         briefing_instruction = f"- {briefing_instruction}\n"
 
+    if source_content:
+        input_block = f"BRIEFING TO THREAD:\n{source_content}"
+        task = "Break the briefing below into an X (Twitter) thread"
+    else:
+        latest_sections = [s for s in results_data if "latest" in s["section"].lower()]
+        feed = latest_sections if latest_sections else results_data
+        input_block = f"LATEST NEWS:\n{_results_text(feed)}"
+        task = "Write an X (Twitter) thread covering the most important current stories"
+
     return f"""/no_think
 You are {cfg['ai_persona']}.
-Write an X (Twitter) thread of exactly {num_posts} posts covering the most important current stories.
+{task} of exactly {num_posts} posts.
 
 Rules:
 - Write exactly {num_posts} posts separated by a line containing only: ---
 - Each post must be under {max_chars} characters including the number prefix
 {numbering}- Each post must be self-contained and make sense on its own
-- Lead with the most newsworthy story in post 1
+- Cover the key points in order — do not skip or invent content
 - End the final post with 2-3 relevant hashtags
 - Write in present tense, professional but accessible tone
 - Do NOT use markdown formatting
-{briefing_instruction}- Pick DIFFERENT stories from any recently posted content listed below
-{recent_block}
-LATEST NEWS:
-{_results_text(feed)}
+{briefing_instruction}
+{input_block}
 
 Write the thread now:"""
 
@@ -141,14 +138,17 @@ _PROMPT_BUILDERS = {
 
 # ── public API ───────────────────────────────────────────────
 
-def generate_output(output_cfg, results_data, cfg, previous_narratives=None):
+def generate_output(output_cfg, results_data, cfg, previous_narratives=None, source_content=None):
     output_type = output_cfg.get("type", "narrative")
     builder = _PROMPT_BUILDERS.get(output_type)
     if not builder:
         log(f"  ⚠ Unknown output type: {output_type}")
         return None
 
-    prompt  = builder(output_cfg, results_data, cfg, previous_narratives)
+    if source_content is not None:
+        prompt = builder(output_cfg, results_data, cfg, previous_narratives, source_content=source_content)
+    else:
+        prompt  = builder(output_cfg, results_data, cfg, previous_narratives)
     payload = json.dumps({
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],

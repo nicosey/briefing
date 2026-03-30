@@ -207,13 +207,19 @@ def main():
             content = mock_output(output_cfg, cfg)
         elif ollama_available:
             if output_type == "narrative":
-                prev = previous_narratives
-            elif output_type in ("tweet", "thread") and not dry_run:
+                prev   = previous_narratives
+                source = None
+            elif output_type == "thread":
+                prev   = None
+                source = generated_outputs.get("narrative")  # thread from narrative
+            elif output_type == "tweet" and not dry_run:
                 lookback_hours = output_cfg.get("tweet_lookback_hours", 6)
-                prev = find_recent_tweets(topic, lookback_hours * 60)
+                prev   = find_recent_tweets(topic, lookback_hours * 60)
+                source = None
             else:
-                prev = None
-            content = generate_output(output_cfg, results_data, cfg, prev)
+                prev   = None
+                source = None
+            content = generate_output(output_cfg, results_data, cfg, prev, source_content=source)
         else:
             content = None
 
