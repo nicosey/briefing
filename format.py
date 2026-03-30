@@ -54,17 +54,20 @@ THREAD_DELIMITER = "\n---\n"
 
 
 def _split_to_limit(text, max_len=280):
-    """Split text into chunks not exceeding max_len, breaking at sentence then word boundaries."""
+    """Split text into chunks not exceeding max_len, breaking at paragraph, sentence, then word boundaries."""
     if len(text) <= max_len:
         return [text]
     chunks = []
     while len(text) > max_len:
-        # Try to break at a sentence boundary within the limit
         window = text[:max_len]
-        cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
-        if cut > 0:
-            cut += 1  # include the punctuation
-        else:
+        # Prefer paragraph break, then sentence boundary (period/!/? followed by space or newline), then word
+        cut = window.rfind("\n\n")
+        if cut <= 0:
+            cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "),
+                      window.rfind(".\n"), window.rfind("!\n"), window.rfind("?\n"))
+            if cut > 0:
+                cut += 1  # include the punctuation
+        if cut <= 0:
             cut = window.rfind(" ")
         if cut <= 0:
             cut = max_len
