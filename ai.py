@@ -138,8 +138,66 @@ _PROMPT_BUILDERS = {
 
 # ── public API ───────────────────────────────────────────────
 
+def _ollama_call(prompt, max_tokens=500):
+    """Single Ollama call, returns stripped text or None."""
+    payload = json.dumps({
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "options": {"temperature": 0.2, "num_predict": max_tokens}
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/chat", data=payload)
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+            return data.get("message", {}).get("content", "").strip() or None
+    except Exception as e:
+        log(f"  ⚠ Ollama call failed: {e}")
+        return None
+
+
+def _generate_thread_from_paragraphs(output_cfg, source_content, cfg):
+    """Split narrative into paragraphs, tighten any that exceed the char limit."""
+    max_chars = output_cfg.get("max_chars_per_post", 280)
+    numbered  = output_cfg.get("numbered", True)
+
+    paragraphs = [p.strip() for p in source_content.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return None
+
+    n          = len(paragraphs)
+    prefix_len = len(f"{n}/{n} ") if numbered else 0
+    effective  = max_chars - prefix_len
+
+    posts = []
+    for i, para in enumerate(paragraphs):
+        if len(para) <= effective:
+            posts.append(para)
+        else:
+            log(f"  ℹ thread: tightening paragraph {i+1} ({len(para)} → ≤{effective} chars)...")
+            tightened = _ollama_call(
+                f"/no_think\nRewrite this to fit within {effective} characters for X (Twitter). "
+                f"Keep all key information. Present tense, professional tone. Output only the rewritten text.\n\n"
+                f"TEXT:\n{para}\n\nRewritten:",
+                max_tokens=200
+            )
+            posts.append(tightened if tightened else para[:effective])
+
+    if numbered:
+        posts = [f"{i+1}/{n} {post}" for i, post in enumerate(posts)]
+
+    log(f"  ✅ thread: {n} posts from narrative paragraphs")
+    return "\n---\n".join(posts)
+
+
 def generate_output(output_cfg, results_data, cfg, previous_narratives=None, source_content=None):
     output_type = output_cfg.get("type", "narrative")
+
+    # Thread without fixed num_posts: split narrative paragraphs
+    if output_type == "thread" and "num_posts" not in output_cfg and source_content:
+        return _generate_thread_from_paragraphs(output_cfg, source_content, cfg)
+
     builder = _PROMPT_BUILDERS.get(output_type)
     if not builder:
         log(f"  ⚠ Unknown output type: {output_type}")
@@ -172,12 +230,15 @@ def generate_output(output_cfg, results_data, cfg, previous_narratives=None, sou
         return None
 
 
+
+
+
 def mock_output(output_cfg, cfg):
     output_type = output_cfg.get("type", "narrative")
     if output_type == "tweet":
         return f"[MOCK TWEET] Key story in {cfg['ai_topic']}: major development spotted, more details emerging. Watch this space."
     if output_type == "thread":
-        num_posts = output_cfg.get("num_posts", 4)
+        num_posts = output_cfg.get("num_posts", 3)
         posts = [f"{i+1}/{num_posts} [MOCK] Thread post {i+1} covering a key story in {cfg['ai_topic']}." for i in range(num_posts)]
         posts[-1] += f" #MockHashtag #{cfg['ai_topic'].replace(' ', '')}"
         return "\n---\n".join(posts)
