@@ -15,7 +15,7 @@ from db        import (init_db, save_run, save_output, add_to_outbox,
                        get_collections, get_last_run_timestamp)
 from search    import fetch_all_results, mock_fetch_results
 from ai        import generate_output, mock_output
-from format    import build_raw_briefing, build_output_message
+from format    import build_raw_briefing, build_output_message, split_thread
 
 
 def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
@@ -30,10 +30,16 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
         if not content:
             continue
         output_id = save_output(timestamp, output_type, name, content)
-        message   = build_output_message(content, output_cfg, cfg)
         out_dest  = output_cfg.get("dest", default_dest)
-        for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
-            add_to_outbox(output_id, dest, message)
+        if output_type == "thread":
+            posts = split_thread(content, output_cfg, cfg)
+            for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
+                for post in posts:
+                    add_to_outbox(output_id, dest, post)
+        else:
+            message = build_output_message(content, output_cfg, cfg)
+            for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
+                add_to_outbox(output_id, dest, message)
 
     # write files
     safe_ts = timestamp.replace(":", "-").replace("T", "_")
@@ -202,7 +208,7 @@ def main():
         elif ollama_available:
             if output_type == "narrative":
                 prev = previous_narratives
-            elif output_type == "tweet" and not dry_run:
+            elif output_type in ("tweet", "thread") and not dry_run:
                 lookback_hours = output_cfg.get("tweet_lookback_hours", 6)
                 prev = find_recent_tweets(topic, lookback_hours * 60)
             else:

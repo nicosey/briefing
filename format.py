@@ -50,11 +50,23 @@ def build_raw_briefing(results_data, cfg):
     return "\n".join(sections)
 
 
+THREAD_DELIMITER = "\n---\n"
+
+
+def split_thread(content, output_cfg, cfg):
+    """Split thread content into individual post strings, applying bold title to the first."""
+    posts = [p.strip() for p in content.split(THREAD_DELIMITER) if p.strip()]
+    title = cfg.get("briefing_title", "")
+    if title and posts:
+        posts[0] = f"{_unicode_bold(title)}\n\n{posts[0]}"
+    return posts
+
+
 def build_output_message(content, output_cfg, cfg):
     """Format a generated output for delivery. Dispatches by output type."""
     output_type = output_cfg.get("type", "narrative")
 
-    if output_type == "tweet":
+    if output_type in ("tweet", "thread"):
         title = cfg.get("briefing_title", "")
         if title:
             return f'{_unicode_bold(title)}\n\n{content}'

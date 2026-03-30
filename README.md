@@ -139,11 +139,23 @@ Each topic config defines an `outputs` array controlling what the AI generates p
 | Type | Description |
 | --- | --- |
 | `narrative` | 3–4 paragraph analysis, up to `max_words` |
-| `tweet` | Single breaking-news sentence, up to `max_chars`. Looks back at recent tweets to avoid repeating the same story |
+| `tweet` | Single breaking-news sentence, up to `max_chars` |
+| `thread` | Multi-post X thread — delivered as separate Telegram messages, one per post, ready to copy-paste |
 
-**Tweet deduplication:** `tweet_lookback_hours` (default: 6) controls how far back the AI looks when avoiding repeated stories.
+### Thread options
 
-**Latest news focus:** Name a search section with "latest" in the title (e.g. `LATEST UK CAPITAL MARKETS NEWS`) and the tweet prompt draws exclusively from that section.
+| Field | Default | Description |
+| --- | --- | --- |
+| `num_posts` | `4` | Number of posts in the thread |
+| `max_chars_per_post` | `280` | Max characters per post including the number prefix |
+| `numbered` | `true` | Prefix each post with its position (e.g. `1/4`) |
+| `tweet_lookback_hours` | `6` | How far back to look when avoiding repeated stories |
+
+The first post gets the briefing type title in Unicode bold (e.g. 𝗠𝗼𝗿𝗻𝗶𝗻𝗴 𝗦𝘁𝗮𝗿𝘁) so it renders as a bold header on X. Each post arrives as a separate Telegram message — copy them one by one, clicking `+` between each to build the thread.
+
+**Deduplication:** Both `tweet` and `thread` look back at recent outputs to avoid repeating the same stories.
+
+**Latest news focus:** Name a search section with "latest" in the title (e.g. `LATEST UK CAPITAL MARKETS NEWS`) and the tweet/thread prompt draws exclusively from that section.
 
 ## Adding a topic
 

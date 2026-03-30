@@ -20,8 +20,8 @@
     }
   },
   "outputs": [
-    {"type": "narrative", "name": "Daily Digest",  "max_words": 500, "dest": "telegram"},
-    {"type": "tweet",     "name": "Tweet Summary", "max_chars": 280, "dest": "telegram"}
+    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram"},
+    {"type": "thread",    "name": "X Thread",      "num_posts": 4,    "max_chars_per_post": 280, "numbered": true, "tweet_lookback_hours": 6, "dest": "telegram"}
   ],
   "searches": [
     {"emoji": "📈", "title": "LATEST UK CAPITAL MARKETS NEWS", "query": "UK capital markets FTSE breaking news today",                                              "count": 5, "category": "news"},

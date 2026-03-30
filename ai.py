@@ -57,6 +57,46 @@ Rules:
 Write the narrative now:"""
 
 
+def _thread_prompt(output_cfg, results_data, cfg, previous_tweets=None):
+    num_posts  = output_cfg.get("num_posts", 4)
+    max_chars  = output_cfg.get("max_chars_per_post", 280)
+    numbered   = output_cfg.get("numbered", True)
+    numbering  = f"- Start each post with its position, e.g. '1/{num_posts}', '2/{num_posts}'\n" if numbered else ""
+
+    latest_sections = [s for s in results_data if "latest" in s["section"].lower()]
+    feed = latest_sections if latest_sections else results_data
+
+    recent_block = ""
+    if previous_tweets:
+        recent_block = "\nRECENT POSTS ALREADY MADE (do NOT repeat these stories):\n"
+        for t in previous_tweets:
+            recent_block += f"- {t}\n"
+        recent_block += "\n"
+
+    briefing_instruction = cfg.get("briefing_instruction", "")
+    if briefing_instruction:
+        briefing_instruction = f"- {briefing_instruction}\n"
+
+    return f"""/no_think
+You are {cfg['ai_persona']}.
+Write an X (Twitter) thread of exactly {num_posts} posts covering the most important current stories.
+
+Rules:
+- Write exactly {num_posts} posts separated by a line containing only: ---
+- Each post must be under {max_chars} characters including the number prefix
+{numbering}- Each post must be self-contained and make sense on its own
+- Lead with the most newsworthy story in post 1
+- End the final post with 2-3 relevant hashtags
+- Write in present tense, professional but accessible tone
+- Do NOT use markdown formatting
+{briefing_instruction}- Pick DIFFERENT stories from any recently posted content listed below
+{recent_block}
+LATEST NEWS:
+{_results_text(feed)}
+
+Write the thread now:"""
+
+
 def _tweet_prompt(output_cfg, results_data, cfg, previous_tweets=None):
     max_chars = output_cfg.get("max_chars", 280)
 
@@ -94,7 +134,8 @@ Write the tweet now:"""
 
 _PROMPT_BUILDERS = {
     "narrative": _narrative_prompt,
-    "tweet":     lambda cfg_out, rd, cfg, prev: _tweet_prompt(cfg_out, rd, cfg, prev),
+    "tweet":     _tweet_prompt,
+    "thread":    _thread_prompt,
 }
 
 
@@ -135,6 +176,11 @@ def mock_output(output_cfg, cfg):
     output_type = output_cfg.get("type", "narrative")
     if output_type == "tweet":
         return f"[MOCK TWEET] Key story in {cfg['ai_topic']}: major development spotted, more details emerging. Watch this space."
+    if output_type == "thread":
+        num_posts = output_cfg.get("num_posts", 4)
+        posts = [f"{i+1}/{num_posts} [MOCK] Thread post {i+1} covering a key story in {cfg['ai_topic']}." for i in range(num_posts)]
+        posts[-1] += f" #MockHashtag #{cfg['ai_topic'].replace(' ', '')}"
+        return "\n---\n".join(posts)
     return (
         f"[MOCK NARRATIVE] This is a test narrative for {cfg['ai_topic']}. "
         "In a real run, Ollama would generate several paragraphs of analysis here.\n\n"
