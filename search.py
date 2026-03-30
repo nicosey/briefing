@@ -5,12 +5,15 @@ import urllib.parse
 from config import SEARXNG_URL, log
 
 
-def search_searxng(query, count=5, category="news"):
-    params = urllib.parse.urlencode({
+def search_searxng(query, count=5, category="news", time_range="day"):
+    p = {
         "q": query, "format": "json",
         "categories": category, "language": "en",
         "number_of_results": count
-    })
+    }
+    if time_range:
+        p["time_range"] = time_range
+    params = urllib.parse.urlencode(p)
     try:
         req = urllib.request.Request(f"{SEARXNG_URL}/search?{params}")
         req.add_header("User-Agent", "DailyBriefing/1.0")
@@ -32,7 +35,7 @@ def fetch_all_results(searches):
     all_results = []
     for s in searches:
         log(f"  Searching: {s['title']}...")
-        results = search_searxng(s["query"], s.get("count", 5), s.get("category", "news"))
+        results = search_searxng(s["query"], s.get("count", 5), s.get("category", "news"), s.get("time_range", "day"))
         all_results.append({
             "section": s["title"],
             "emoji":   s["emoji"],
