@@ -146,7 +146,8 @@ def main():
                 log(f"📦 Full-day mode — loading collections since midnight...")
             else:
                 last_run = get_last_run_timestamp(topic)
-                since = last_run or datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
+                midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
+                since = max(last_run, midnight) if last_run else midnight
                 log(f"📦 Loading collections since {since[:16]}...")
 
             collected = get_collections(topic, since)

@@ -53,12 +53,41 @@ def build_raw_briefing(results_data, cfg):
 THREAD_DELIMITER = "\n---\n"
 
 
+def _split_to_limit(text, max_len=280):
+    """Split text into chunks not exceeding max_len, breaking at sentence then word boundaries."""
+    if len(text) <= max_len:
+        return [text]
+    chunks = []
+    while len(text) > max_len:
+        # Try to break at a sentence boundary within the limit
+        window = text[:max_len]
+        cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+        if cut > 0:
+            cut += 1  # include the punctuation
+        else:
+            cut = window.rfind(" ")
+        if cut <= 0:
+            cut = max_len
+        chunks.append(text[:cut].strip())
+        text = text[cut:].strip()
+    if text:
+        chunks.append(text)
+    return chunks
+
+
 def split_thread(content, output_cfg, cfg):
     """Split thread content into individual post strings, applying bold title to the first."""
-    posts = [p.strip() for p in content.split(THREAD_DELIMITER) if p.strip()]
+    max_len = output_cfg.get("max_post_length", 280)
+    raw_posts = [p.strip() for p in content.split(THREAD_DELIMITER) if p.strip()]
+    posts = []
+    for post in raw_posts:
+        posts.extend(_split_to_limit(post, max_len))
     title = cfg.get("briefing_title", "")
     if title and posts:
-        posts[0] = f"{_unicode_bold(title)}\n\n{posts[0]}"
+        bold_title = f"{_unicode_bold(title)}\n\n"
+        first_limit = max_len - len(bold_title)
+        first_chunks = _split_to_limit(posts[0], first_limit)
+        posts = [bold_title + first_chunks[0]] + first_chunks[1:] + posts[1:]
     return posts
 
 
