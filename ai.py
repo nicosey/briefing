@@ -157,35 +157,58 @@ def _ollama_call(prompt, max_tokens=500):
         return None
 
 
+def _hard_split(text, max_len):
+    """Split text into chunks ≤ max_len at sentence then word boundaries."""
+    if len(text) <= max_len:
+        return [text]
+    chunks = []
+    while len(text) > max_len:
+        window = text[:max_len]
+        cut = window.rfind("\n\n")
+        if cut <= 0:
+            cut = max(window.rfind(". "), window.rfind("! "), window.rfind("? "),
+                      window.rfind(".\n"), window.rfind("!\n"), window.rfind("?\n"))
+            if cut > 0:
+                cut += 1
+        if cut <= 0:
+            cut = window.rfind(" ")
+        if cut <= 0:
+            cut = max_len
+        chunks.append(text[:cut].strip())
+        text = text[cut:].strip()
+    if text:
+        chunks.append(text)
+    return chunks
+
+
 def _generate_thread_from_paragraphs(output_cfg, source_content, cfg):
-    """Split narrative into paragraphs, tighten any that exceed the char limit."""
+    """Split narrative into posts ≤ max_chars, numbered after all splitting."""
     max_chars = output_cfg.get("max_chars_per_post", 280)
     numbered  = output_cfg.get("numbered", True)
 
-    paragraphs = [p.strip() for p in source_content.split("\n\n") if p.strip()]
-    if not paragraphs:
+    # Split on double or single newlines for resilience against inconsistent AI output
+    import re
+    raw = [p.strip() for p in re.split(r'\n\n+|\n', source_content) if p.strip()]
+    if not raw:
         return None
 
-    n          = len(paragraphs)
-    prefix_len = len(f"{n}/{n} ") if numbered else 0
-    effective  = max_chars - prefix_len
-
+    # Split any chunk that still exceeds max_chars (before numbering overhead)
     posts = []
-    for i, para in enumerate(paragraphs):
-        if len(para) <= effective:
-            posts.append(para)
-        else:
-            log(f"  ℹ thread: tightening paragraph {i+1} ({len(para)} → ≤{effective} chars)...")
-            tightened = _ollama_call(
-                f"/no_think\nRewrite this to fit within {effective} characters for X (Twitter). "
-                f"Keep all key information. Present tense, professional tone. Output only the rewritten text.\n\n"
-                f"TEXT:\n{para}\n\nRewritten:",
-                max_tokens=200
-            )
-            posts.append(tightened if tightened else para[:effective])
+    for chunk in raw:
+        posts.extend(_hard_split(chunk, max_chars))
 
+    # Number after all splitting so the total is accurate
+    n = len(posts)
     if numbered:
-        posts = [f"{i+1}/{n} {post}" for i, post in enumerate(posts)]
+        numbered_posts = []
+        for i, post in enumerate(posts):
+            prefix = f"{i+1}/{n} "
+            # Trim post if prefix pushes it over limit
+            available = max_chars - len(prefix)
+            if len(post) > available:
+                post = _hard_split(post, available)[0]
+            numbered_posts.append(prefix + post)
+        posts = numbered_posts
 
     log(f"  ✅ thread: {n} posts from narrative paragraphs")
     return "\n---\n".join(posts)
