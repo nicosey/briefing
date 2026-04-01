@@ -3,10 +3,7 @@ import os
 import sys
 import urllib.request
 
-from config import (
-    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    log,
-)
+from config import log
 
 
 # ── base ─────────────────────────────────────────────────────
@@ -95,35 +92,41 @@ class MultiDelivery(Delivery):
 
 
 # ── registry ─────────────────────────────────────────────────
-# To add a new destination: implement a Delivery subclass and add it here.
 
-REGISTRY = {
-    "telegram": lambda cfg: TelegramDelivery(
-        token   = TELEGRAM_BOT_TOKEN,
-        chat_id = cfg.get("telegram_chat_id", TELEGRAM_CHAT_ID),
-    ),
-    "console": lambda cfg: ConsoleDelivery(),
-}
+def _make_telegram(name):
+    """Resolve token and chat_id for a telegram dest name.
+    'telegram'          -> TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+    'telegram_robotics' -> TELEGRAM_BOT_TOKEN_ROBOTICS / TELEGRAM_CHAT_ID_ROBOTICS
+    """
+    suffix = name[len("telegram_"):].upper() if name != "telegram" else ""
+    token_key   = f"TELEGRAM_BOT_TOKEN_{suffix}" if suffix else "TELEGRAM_BOT_TOKEN"
+    chat_key    = f"TELEGRAM_CHAT_ID_{suffix}"   if suffix else "TELEGRAM_CHAT_ID"
+    token   = os.environ.get(token_key, "")
+    chat_id = os.environ.get(chat_key, "")
+    if not token or not chat_id:
+        log(f"❌ Missing env vars for '{name}': need {token_key} and {chat_key}")
+        sys.exit(1)
+    return TelegramDelivery(token=token, chat_id=chat_id)
 
 
 def make_delivery(dest, dry_run, cfg=None):
-    """Build a Delivery for a specific dest string (comma-separated names)."""
+    """Build a Delivery for a dest string (comma-separated names).
+    Supports 'console', 'telegram', and 'telegram_<name>' for named bots.
+    """
     if dry_run:
         return ConsoleDelivery()
 
-    cfg   = cfg or {}
     names = [d.strip() for d in dest.split(",") if d.strip()]
-
     deliveries = []
     for name in names:
-        if name not in REGISTRY:
-            log(f"❌ Unknown delivery destination: {name}. Choose from: {', '.join(REGISTRY)}")
+        if name == "console":
+            deliveries.append(ConsoleDelivery())
+        elif name == "telegram" or name.startswith("telegram_"):
+            deliveries.append(_make_telegram(name))
+        else:
+            log(f"❌ Unknown delivery destination: '{name}'. Use 'telegram', 'telegram_<name>', or 'console'.")
             sys.exit(1)
-        deliveries.append(REGISTRY[name](cfg))
 
     return deliveries[0] if len(deliveries) == 1 else MultiDelivery(deliveries)
 
 
-def get_delivery(dry_run, cfg=None):
-    dest = os.environ.get("BRIEFING_DEST", "console")
-    return make_delivery(dest, dry_run, cfg)

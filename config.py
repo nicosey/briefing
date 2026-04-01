@@ -18,8 +18,6 @@ def _load_env(path=".env"):
 
 _load_env()
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 SEARXNG_URL        = os.environ.get("SEARXNG_URL", "http://localhost:8888")
 OLLAMA_URL         = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL       = os.environ.get("OLLAMA_MODEL", "qwen3-coder:30b")
