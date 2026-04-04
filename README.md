@@ -12,6 +12,15 @@ A lightweight daily news briefing pipeline. Searches for recent news via [SearXN
 
 Separating collection from generation means each briefing draws on several hours of accumulated news rather than a single search snapshot.
 
+### Live session mode
+
+`session.py` adds a fourth mode for monitoring a story as it develops in real time:
+
+1. **Interim cycles** — every N minutes, runs `collect.py` then `briefing.py --save-only`. Each mini-briefing is saved to the DB but not delivered.
+2. **Final aggregation** — after all cycles complete (or on `Ctrl+C`), runs `briefing.py --lookback` which reads all interim narratives as context, generates a single synthesised output, and publishes it.
+
+This is useful for watching a fast-moving story over a morning or afternoon without flooding Telegram with every update — only the final summary is delivered.
+
 ### Briefing types
 
 Each run can be given a `--briefing-type` that changes both the message title and the AI's writing instruction:
@@ -68,16 +77,19 @@ BRIEFING_DEST=telegram
 
 ```bash
 # Collect latest news for a topic (run hourly)
-python collect.py <topic>
+python3 collect.py <topic>
 
 # Generate a briefing from collected data and queue for delivery
-python briefing.py <topic> [options]
+python3 briefing.py <topic> [options]
 
 # Publish all queued outputs to Telegram
-python publish.py
+python3 publish.py
 
 # Or run briefing + publish together
 ./run.sh <topic> [briefing flags...]
+
+# Live session: collect + brief at intervals, then aggregate and publish
+python3 session.py <topic> [options]
 ```
 
 ### collect.py options
@@ -92,24 +104,45 @@ python publish.py
 | --- | --- |
 | `--mock` | Fake SearXNG + Ollama — no services needed |
 | `--dry-run` | Skip DB write and outbox, print to terminal instead |
+| `--save-only` | Save to DB (for aggregation context) but skip delivery — used by session.py for interim cycles |
 | `--briefing-type <name>` | Set the briefing type (e.g. `morning`, `midday`, `eod`) — controls title and AI instruction |
 | `--full-day` | Use all collections since midnight (for end-of-day summary) |
 | `--lookback N` | Include last N minutes of saved narratives as AI context |
+
+### session.py options
+
+| Option | Description |
+| --- | --- |
+| `--interval N` | Minutes between interim cycles (default: 60) |
+| `--count N` | Number of interim cycles before the final aggregation (default: 3) |
+| `--duration N` | Total session duration in minutes — alternative to `--count` |
+| `--briefing-type <name>` | Briefing type applied to the final aggregated output |
+| `--mock` | Fake SearXNG + Ollama — no services needed |
+| `--dry-run` | Skip DB writes and delivery |
 
 ### Examples
 
 ```bash
 # Test locally with no services
-python briefing.py robotics --mock --dry-run
+python3 briefing.py robotics --mock --dry-run
 
 # Real run using collected data
-python briefing.py uk_capital_markets --briefing-type morning
+python3 briefing.py uk_capital_markets --briefing-type morning
 
 # End of day summary covering all day's collections
-python briefing.py uk_capital_markets --briefing-type eod --full-day
+python3 briefing.py uk_capital_markets --briefing-type eod --full-day
 
 # Collect + brief + publish in one step
 ./run.sh uk_capital_markets --briefing-type morning
+
+# Live session: 3 cycles every 10 min, then aggregate and publish
+python3 session.py robotics --interval 10 --count 3
+
+# Live session: run for 2 hours every 30 min, EOD final summary
+python3 session.py uk_capital_markets --duration 120 --interval 30 --briefing-type eod
+
+# Test the session loop with no services
+python3 session.py robotics --interval 1 --count 2 --mock --dry-run
 ```
 
 **Available topics:** `robotics`, `uk_capital_markets`, `data_centres`, `bjj`
