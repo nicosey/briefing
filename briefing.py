@@ -19,7 +19,7 @@ from format    import build_raw_briefing, build_output_message, split_thread
 
 
 def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
-                    default_dest, aggregated_from=None):
+                    default_dest, aggregated_from=None, save_only=False):
     agg_timestamps = [ts for ts, _ in (aggregated_from or [])]
     save_run(timestamp, topic, raw_briefing, aggregated_from=agg_timestamps)
 
@@ -30,6 +30,8 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
         if not content:
             continue
         output_id = save_output(timestamp, output_type, name, content)
+        if save_only:
+            continue
         out_dest  = output_cfg.get("dest", default_dest)
         if output_type == "thread":
             posts = split_thread(content, output_cfg, cfg)
@@ -58,9 +60,10 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
 
 def main():
     raw_args = sys.argv[1:]
-    mock          = "--mock"     in raw_args
-    dry_run       = "--dry-run"  in raw_args
-    full_day      = "--full-day" in raw_args
+    mock          = "--mock"      in raw_args
+    dry_run       = "--dry-run"   in raw_args
+    full_day      = "--full-day"  in raw_args
+    save_only     = "--save-only" in raw_args
 
     lookback      = 0
     briefing_type = None
@@ -123,6 +126,7 @@ def main():
     log(cfg["title"]
         + (" [MOCK]"                  if mock              else "")
         + (" [DRY RUN]"               if dry_run           else "")
+        + (" [SAVE ONLY]"             if save_only         else "")
         + (" [FULL DAY]"              if full_day          else "")
         + (f" [LOOKBACK {lookback}m]" if lookback          else ""))
     log("=" * 40)
@@ -228,7 +232,7 @@ def main():
         if content:
             generated_outputs[output_type] = content
             out_dest = output_cfg.get("dest", default_dest)
-            log(f"  ✅ {name} ({len(content)} chars) → queued for {out_dest}")
+            log(f"  ✅ {name} ({len(content)} chars) → {'saved (no delivery)' if save_only else f'queued for {out_dest}'}")
         else:
             log(f"  ⚠ Skipping {name}")
         log("")
@@ -236,7 +240,8 @@ def main():
     if not dry_run:
         log("💾 Saving results...")
         persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
-                        default_dest, aggregated_from=previous_narratives or None)
+                        default_dest, aggregated_from=previous_narratives or None,
+                        save_only=save_only)
         if previous_narratives:
             mark_aggregated([ts for ts, _ in previous_narratives])
             log(f"  ✅ Marked {len(previous_narratives)} previous run(s) as aggregated")
