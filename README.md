@@ -51,9 +51,14 @@ SEARXNG_URL=http://localhost:8888
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=qwen3-coder:30b
 
-# Telegram (optional)
+# Default Telegram bot — used by dest: "telegram"
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
+
+# Named bots — used by dest: "telegram_<name>"
+# Add one pair per bot; the suffix must match the dest name in upper case
+TELEGRAM_BOT_TOKEN_ROBOTICS_JN=your_robotics_token
+TELEGRAM_CHAT_ID_ROBOTICS_JN=your_robotics_chat_id
 
 # Default outbox destination for outputs without an explicit dest (default: console)
 BRIEFING_DEST=telegram
@@ -114,16 +119,19 @@ python briefing.py uk_capital_markets --briefing-type eod --full-day
 | Destination | Description |
 | --- | --- |
 | `console` | Print to terminal |
-| `telegram` | Send to a Telegram chat via bot API |
+| `telegram` | Send via the default bot (`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`) |
+| `telegram_<name>` | Send via a named bot — reads `TELEGRAM_BOT_TOKEN_<NAME>` and `TELEGRAM_CHAT_ID_<NAME>` from `.env` |
 
 Set `BRIEFING_DEST` in `.env` as the default, or set `dest` per output in the topic config:
 
 ```json
 "outputs": [
   {"type": "narrative", "name": "Daily Digest",  "dest": "telegram"},
-  {"type": "tweet",     "name": "Tweet Summary", "dest": "telegram"}
+  {"type": "thread",    "name": "X Thread",       "dest": "telegram_robotics_jn"}
 ]
 ```
+
+To add a new bot, create the bot via `@BotFather`, add the token and chat ID to `.env` as `TELEGRAM_BOT_TOKEN_<NAME>` and `TELEGRAM_CHAT_ID_<NAME>`, then use `"dest": "telegram_<name>"` in the config. No code changes needed.
 
 ## Output types
 
@@ -146,14 +154,12 @@ Each topic config defines an `outputs` array controlling what the AI generates p
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `num_posts` | `4` | Number of posts in the thread |
 | `max_chars_per_post` | `280` | Max characters per post including the number prefix |
-| `numbered` | `true` | Prefix each post with its position (e.g. `1/4`) |
-| `tweet_lookback_hours` | `6` | How far back to look when avoiding repeated stories |
+| `numbered` | `true` | Prefix each post with its position (e.g. `1/7`) |
 
-The first post gets the briefing type title in Unicode bold (e.g. 𝗠𝗼𝗿𝗻𝗶𝗻𝗴 𝗦𝘁𝗮𝗿𝘁) so it renders as a bold header on X. Each post arrives as a separate Telegram message — copy them one by one, clicking `+` between each to build the thread.
+Thread posts are derived from the narrative output — each paragraph becomes a post. Paragraphs longer than `max_chars_per_post` are hard-split at sentence then word boundaries. The post count is determined by the content, not a fixed number. The first post gets the briefing title in Unicode bold (e.g. 𝗠𝗼𝗿𝗻𝗶𝗻𝗴 𝗦𝘁𝗮𝗿𝘁) so it renders on X. Each post arrives as a separate Telegram message.
 
-**Deduplication:** Both `tweet` and `thread` look back at recent outputs to avoid repeating the same stories.
+**Deduplication:** `tweet` looks back at recent outputs to avoid repeating the same stories.
 
 **Latest news focus:** Name a search section with "latest" in the title (e.g. `LATEST UK CAPITAL MARKETS NEWS`) and the tweet/thread prompt draws exclusively from that section.
 
@@ -214,7 +220,7 @@ Results are stored in `output/briefings.db` (SQLite — no server required):
 
 ## Scheduling on macOS (launchd)
 
-Four jobs for the UK capital markets topic:
+### UK Capital Markets
 
 | Job | Schedule | Command |
 | --- | --- | --- |
@@ -222,6 +228,12 @@ Four jobs for the UK capital markets topic:
 | `com.briefing.uk_capital_markets` | 7am daily | `run.sh uk_capital_markets --briefing-type morning` |
 | `com.briefing.uk_capital_markets_digest` | 12pm daily | `run.sh uk_capital_markets --briefing-type midday` |
 | `com.briefing.uk_capital_markets_eod` | 5pm daily | `run.sh uk_capital_markets --briefing-type eod --full-day` |
+
+### Robotics
+
+| Job | Schedule | Command |
+| --- | --- | --- |
+| `com.briefing.robotics` | 6pm daily | `briefing.py robotics && publish.py` |
 
 ### Plist template
 

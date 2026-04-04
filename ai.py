@@ -256,18 +256,27 @@ def generate_output(output_cfg, results_data, cfg, previous_narratives=None, sou
 
 
 
-def mock_output(output_cfg, cfg):
+_MOCK_NARRATIVE = (
+    "In a real run, Ollama would generate several paragraphs of analysis here. "
+    "Lead story: a major development has emerged with significant market implications.\n\n"
+    "A second paragraph would discuss trends and key players involved in today's story. "
+    "Several companies are affected and analysts are watching closely.\n\n"
+    "A third paragraph would add context and historical perspective. "
+    "This follows a pattern seen in previous quarters and may signal a broader shift.\n\n"
+    "Watch for follow-up developments over the next 24 hours as the situation evolves."
+)
+
+
+def mock_output(output_cfg, cfg, source_content=None):
     output_type = output_cfg.get("type", "narrative")
     if output_type == "tweet":
-        return f"[MOCK TWEET] Key story in {cfg['ai_topic']}: major development spotted, more details emerging. Watch this space."
+        return (
+            f"[MOCK] Major development in {cfg['ai_topic']}: key story emerging with broad implications. "
+            f"#{cfg['ai_topic'].replace(' ', '')} #MockData"
+        )
     if output_type == "thread":
-        num_posts = output_cfg.get("num_posts", 3)
-        posts = [f"{i+1}/{num_posts} [MOCK] Thread post {i+1} covering a key story in {cfg['ai_topic']}." for i in range(num_posts)]
-        posts[-1] += f" #MockHashtag #{cfg['ai_topic'].replace(' ', '')}"
-        return "\n---\n".join(posts)
-    return (
-        f"[MOCK NARRATIVE] This is a test narrative for {cfg['ai_topic']}. "
-        "In a real run, Ollama would generate several paragraphs of analysis here.\n\n"
-        "A second paragraph would discuss trends and key players.\n\n"
-        "Watch for real data when you run this on the Mac Mini."
-    )
+        # Use the same paragraph-splitting path as real mode
+        narrative = source_content or _MOCK_NARRATIVE
+        return _generate_thread_from_paragraphs(output_cfg, narrative, cfg)
+    # narrative
+    return f"[MOCK] {_MOCK_NARRATIVE}"

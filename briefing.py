@@ -205,7 +205,8 @@ def main():
 
         log(f"🧠 Generating {name}...")
         if mock:
-            content = mock_output(output_cfg, cfg)
+            source = generated_outputs.get("narrative") if output_type == "thread" else None
+            content = mock_output(output_cfg, cfg, source_content=source)
         elif ollama_available:
             if output_type == "narrative":
                 prev   = previous_narratives
