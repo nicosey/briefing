@@ -102,11 +102,14 @@ class MarkdownDelivery(Delivery):
         self.output_dir = output_dir
 
     def _filename(self, message):
-        meta = parse_frontmatter(message)
-        date  = meta.get("date", "")
-        time  = meta.get("time", "").replace(":", "-")
-        topic = meta.get("topic", "briefing")
-        return f"{date}T{time}-{topic}.md" if date else f"{topic}.md"
+        meta    = parse_frontmatter(message)
+        topic   = meta.get("topic", "briefing")
+        pubdate = meta.get("pubDate", "")
+        if pubdate:
+            # pubDate: 2026-04-08T14:49:38 → 2026-04-08T14-49
+            dt = pubdate[:16].replace(":", "-")
+            return f"{dt}-{topic}.md"
+        return f"{topic}.md"
 
     def send(self, message):
         try:
