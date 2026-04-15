@@ -5,7 +5,7 @@ import sys
 import urllib.request
 
 from config import log
-from format import parse_frontmatter
+from format import parse_frontmatter, validate_astro_frontmatter
 
 
 # ── base ─────────────────────────────────────────────────────
@@ -144,6 +144,11 @@ class GitHubDelivery(MarkdownDelivery):
         return result.stdout.strip()
 
     def send(self, message):
+        errors = validate_astro_frontmatter(message)
+        if errors:
+            for e in errors:
+                log(f"  ❌ Frontmatter validation failed: {e}")
+            return False
         if not super().send(message):
             return False
         filename = self._filename(message)

@@ -105,6 +105,46 @@ class TestMarkdownDests(unittest.TestCase):
         self.assertIn("github", MARKDOWN_DESTS)
 
 
+class TestValidateAstroFrontmatter(unittest.TestCase):
+
+    def setUp(self):
+        from format import validate_astro_frontmatter
+        self.validate = validate_astro_frontmatter
+
+    def _valid(self):
+        return (
+            '---\ntitle: "My Title"\ndescription: "A description"\n'
+            'pubDate: 2026-04-08T18:00:00\ntopic: test\n---\n\nBody.'
+        )
+
+    def test_valid_frontmatter_returns_no_errors(self):
+        self.assertEqual(self.validate(self._valid()), [])
+
+    def test_missing_title_returns_error(self):
+        md = '---\ndescription: "desc"\npubDate: 2026-04-08T18:00:00\n---\n'
+        errors = self.validate(md)
+        self.assertTrue(any("title" in e for e in errors))
+
+    def test_missing_description_returns_error(self):
+        md = '---\ntitle: "T"\npubDate: 2026-04-08T18:00:00\n---\n'
+        errors = self.validate(md)
+        self.assertTrue(any("description" in e for e in errors))
+
+    def test_missing_pubdate_returns_error(self):
+        md = '---\ntitle: "T"\ndescription: "D"\n---\n'
+        errors = self.validate(md)
+        self.assertTrue(any("pubDate" in e for e in errors))
+
+    def test_invalid_pubdate_returns_error(self):
+        md = '---\ntitle: "T"\ndescription: "D"\npubDate: not-a-date\n---\n'
+        errors = self.validate(md)
+        self.assertTrue(any("Invalid pubDate" in e for e in errors))
+
+    def test_no_frontmatter_returns_error(self):
+        errors = self.validate("No frontmatter here.")
+        self.assertTrue(len(errors) > 0)
+
+
 # ── delivery tests ────────────────────────────────────────────
 
 class TestMarkdownDelivery(unittest.TestCase):
@@ -113,14 +153,16 @@ class TestMarkdownDelivery(unittest.TestCase):
         from delivery import MarkdownDelivery
         self.cls = MarkdownDelivery
 
+    def _msg(self, topic="robotics"):
+        return (
+            f'---\ntitle: "Test"\ndescription: "A test."\n'
+            f'pubDate: 2026-04-08T09:00:00\ntopic: {topic}\nmodel: test\n---\n\nContent.\n'
+        )
+
     def test_writes_md_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             d = self.cls(tmpdir)
-            msg = (
-                '---\ntitle: "Test"\ndate: 2026-04-08\ntime: "09:00"\n'
-                'topic: robotics\nmodel: test\n---\n\nContent.\n'
-            )
-            ok = d.send(msg)
+            ok = d.send(self._msg())
             self.assertTrue(ok)
             files = os.listdir(tmpdir)
             self.assertEqual(len(files), 1)
@@ -129,11 +171,7 @@ class TestMarkdownDelivery(unittest.TestCase):
     def test_filename_includes_date_and_topic(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             d = self.cls(tmpdir)
-            msg = (
-                '---\ntitle: "T"\ndate: 2026-04-08\ntime: "09:00"\n'
-                'topic: robotics\nmodel: test\n---\n\nBody.\n'
-            )
-            d.send(msg)
+            d.send(self._msg("robotics"))
             filename = os.listdir(tmpdir)[0]
             self.assertIn("2026-04-08", filename)
             self.assertIn("robotics", filename)
@@ -141,10 +179,7 @@ class TestMarkdownDelivery(unittest.TestCase):
     def test_file_content_matches_message(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             d = self.cls(tmpdir)
-            msg = (
-                '---\ntitle: "T"\ndate: 2026-04-08\ntime: "09:00"\n'
-                'topic: test\nmodel: test\n---\n\nHello world.\n'
-            )
+            msg = self._msg("test")
             d.send(msg)
             filename = os.listdir(tmpdir)[0]
             with open(os.path.join(tmpdir, filename)) as f:
@@ -159,8 +194,8 @@ class TestGitHubDelivery(unittest.TestCase):
 
     def _msg(self):
         return (
-            '---\ntitle: "GitHub Test"\ndate: 2026-04-08\ntime: "09:00"\n'
-            'topic: test\nmodel: test\n---\n\nTest content.\n'
+            '---\ntitle: "GitHub Test"\ndescription: "A test."\n'
+            'pubDate: 2026-04-08T09:00:00\ntopic: test\nmodel: test\n---\n\nTest content.\n'
         )
 
     def test_pushes_on_successful_write(self):

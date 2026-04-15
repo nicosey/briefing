@@ -111,6 +111,31 @@ def parse_frontmatter(text):
     return result
 
 
+def validate_astro_frontmatter(text):
+    """Check frontmatter satisfies the Astro briefings collection schema.
+    Returns a list of error strings — empty list means valid.
+    """
+    from datetime import datetime as dt
+    errors = []
+    meta = parse_frontmatter(text)
+    if not meta:
+        errors.append("No frontmatter block found")
+        return errors
+    if not meta.get("title"):
+        errors.append("Missing required field: title")
+    if not meta.get("description"):
+        errors.append("Missing required field: description")
+    pubdate = meta.get("pubDate", "")
+    if not pubdate:
+        errors.append("Missing required field: pubDate")
+    else:
+        try:
+            dt.fromisoformat(pubdate)
+        except ValueError:
+            errors.append(f"Invalid pubDate: '{pubdate}' — expected ISO format e.g. 2026-04-08T18:00:00")
+    return errors
+
+
 def build_markdown_message(content, output_cfg, cfg):
     """Format a generated output as Markdown with Astro-compatible frontmatter."""
     now   = datetime.now()
