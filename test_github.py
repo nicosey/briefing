@@ -1,19 +1,21 @@
 """Quick test: write a dummy .md file to the Astro repo and push to GitHub."""
 import sys
+from datetime import datetime
 from delivery import _make_github
 
 delivery = _make_github()
+now = datetime.now()
 
-test_md = """\
+test_md = f"""\
 ---
 title: "GitHub Connection Test"
-date: 2026-01-01
-time: "00:00"
+description: "Automated connection test from test_github.py"
+pubDate: {now.strftime('%Y-%m-%dT%H:%M:%S')}
 topic: test
 model: test
 ---
 
-This is a test file created by test_github.py. Safe to delete.
+This is a test file created by test_github.py at {now.strftime('%Y-%m-%d %H:%M:%S')}. Safe to delete.
 """
 
 print("Testing GitHub delivery...")

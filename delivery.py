@@ -149,7 +149,13 @@ class GitHubDelivery(MarkdownDelivery):
         title    = meta.get("title", filename)
         try:
             self._git("add", rel_path)
-            self._git("commit", "-m", f"briefing: {title}")
+            try:
+                self._git("commit", "-m", f"briefing: {title}")
+            except RuntimeError as e:
+                if "nothing to commit" in str(e).lower() or "nothing added" in str(e).lower():
+                    log(f"  ℹ GitHub: no changes to commit for {rel_path}")
+                    return True
+                raise
             self._git("push", "origin", self.branch)
             log(f"  ✅ GitHub: pushed {rel_path} → {self.branch}")
             return True
