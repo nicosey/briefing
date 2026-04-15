@@ -33,7 +33,11 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
         output_id = save_output(timestamp, output_type, name, content)
         if save_only:
             continue
-        out_dest  = cfg.get("_dest_override") or output_cfg.get("dest", default_dest)
+        # dest_override only applies to narrative — threads/tweets use their own dest
+        if output_type == "narrative":
+            out_dest = cfg.get("_dest_override") or output_cfg.get("dest", default_dest)
+        else:
+            out_dest = output_cfg.get("dest", default_dest)
         dests = [d.strip() for d in out_dest.split(",") if d.strip()]
         if output_type == "thread":
             posts = split_thread(content, output_cfg, cfg)
@@ -245,8 +249,8 @@ def main():
                 title = generate_title(content, cfg)
                 if title:
                     cfg["briefing_title"] = title
-            out_dest = cfg.get("_dest_override") or output_cfg.get("dest", default_dest)
-            log(f"  ✅ {name} ({len(content)} chars) → {'saved (no delivery)' if save_only else f'queued for {out_dest}'}")
+            effective_dest = cfg.get("_dest_override") or output_cfg.get("dest", default_dest) if output_type == "narrative" else output_cfg.get("dest", default_dest)
+            log(f"  ✅ {name} ({len(content)} chars) → {'saved (no delivery)' if save_only else f'queued for {effective_dest}'}")
         else:
             log(f"  ⚠ Skipping {name}")
         log("")
