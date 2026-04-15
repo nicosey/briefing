@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import urllib.request
+from datetime import datetime
 
 from config import log
 from format import parse_frontmatter, validate_astro_frontmatter
@@ -144,6 +145,9 @@ class GitHubDelivery(MarkdownDelivery):
         return result.stdout.strip()
 
     def send(self, message):
+        if datetime.now().weekday() >= 5:  # 5=Saturday, 6=Sunday
+            log("  ℹ GitHub: skipping publish — weekend")
+            return True
         errors = validate_astro_frontmatter(message)
         if errors:
             for e in errors:

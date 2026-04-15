@@ -220,6 +220,16 @@ class TestGitHubDelivery(unittest.TestCase):
                     self.assertFalse(result)
                     mock_git.assert_not_called()
 
+    def test_skips_push_on_weekend(self):
+        with patch("delivery.datetime") as mock_dt:
+            mock_dt.now.return_value.weekday.return_value = 5  # Saturday
+            with tempfile.TemporaryDirectory() as tmpdir:
+                d = self.cls(repo_path=tmpdir, md_dir="content", branch="main")
+                with patch.object(d, "_git") as mock_git:
+                    result = d.send(self._msg())
+                    self.assertTrue(result)
+                    mock_git.assert_not_called()
+
     def test_returns_false_on_git_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             md_dir = "content"
