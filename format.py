@@ -116,11 +116,14 @@ def build_markdown_message(content, output_cfg, cfg):
     now   = datetime.now()
     title = cfg.get("briefing_title", cfg.get("ai_topic", cfg["title"]))
     topic = cfg.get("_topic", "briefing")
+    # First sentence as description (up to 160 chars)
+    first_sentence = content.strip().split(". ")[0].strip()
+    description = first_sentence[:160] + ("…" if len(first_sentence) > 160 else "")
     return (
         f"---\n"
         f'title: "{title}"\n'
-        f"date: {now.strftime('%Y-%m-%d')}\n"
-        f'time: "{now.strftime("%H:%M")}"\n'
+        f'description: "{description}"\n'
+        f"pubDate: {now.strftime('%Y-%m-%dT%H:%M:%S')}\n"
         f"topic: {topic}\n"
         f'model: "{OLLAMA_MODEL}"\n'
         f"---\n\n"

@@ -52,10 +52,12 @@ class TestBuildMarkdownMessage(unittest.TestCase):
         self.assertTrue(msg.startswith("---\n"))
         self.assertIn("\n---\n", msg)
 
-    def test_contains_title_and_topic(self):
+    def test_contains_title_topic_and_pubdate(self):
         msg = self.build("Content.", {}, self._cfg())
         self.assertIn("Morning Start", msg)
         self.assertIn("uk_capital_markets", msg)
+        self.assertIn("pubDate:", msg)
+        self.assertIn("description:", msg)
 
     def test_contains_content(self):
         msg = self.build("The actual content.", {}, self._cfg())
