@@ -15,7 +15,8 @@ from db        import (init_db, save_run, save_output, add_to_outbox,
                        get_collections, get_last_run_timestamp)
 from search    import fetch_all_results, mock_fetch_results
 from ai        import generate_output, mock_output
-from format    import build_raw_briefing, build_output_message, split_thread
+from format    import (build_raw_briefing, build_output_message, build_markdown_message,
+                       split_thread, MARKDOWN_DESTS)
 
 
 def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_cfg, cfg,
@@ -33,14 +34,18 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
         if save_only:
             continue
         out_dest  = output_cfg.get("dest", default_dest)
+        dests = [d.strip() for d in out_dest.split(",") if d.strip()]
         if output_type == "thread":
             posts = split_thread(content, output_cfg, cfg)
-            for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
+            for dest in dests:
                 for post in posts:
                     add_to_outbox(output_id, dest, post)
         else:
-            message = build_output_message(content, output_cfg, cfg)
-            for dest in [d.strip() for d in out_dest.split(",") if d.strip()]:
+            for dest in dests:
+                if dest in MARKDOWN_DESTS or dest.startswith("github"):
+                    message = build_markdown_message(content, output_cfg, cfg)
+                else:
+                    message = build_output_message(content, output_cfg, cfg)
                 add_to_outbox(output_id, dest, message)
 
     # write files
@@ -101,6 +106,7 @@ def main():
 
     topic = args[0]
     cfg   = load_topic_config(topic)
+    cfg["_topic"] = topic
 
     # Apply briefing type overrides (title + AI instruction)
     if briefing_type:

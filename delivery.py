@@ -1,9 +1,11 @@
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 
 from config import log
+from format import parse_frontmatter
 
 
 # ── base ─────────────────────────────────────────────────────
@@ -91,6 +93,71 @@ class MultiDelivery(Delivery):
             d.send_long(message)
 
 
+# ── markdown ─────────────────────────────────────────────────
+
+class MarkdownDelivery(Delivery):
+    """Writes the output as a .md file to a local directory."""
+
+    def __init__(self, output_dir):
+        self.output_dir = output_dir
+
+    def _filename(self, message):
+        meta = parse_frontmatter(message)
+        date  = meta.get("date", "")
+        time  = meta.get("time", "").replace(":", "-")
+        topic = meta.get("topic", "briefing")
+        return f"{date}T{time}-{topic}.md" if date else f"{topic}.md"
+
+    def send(self, message):
+        try:
+            os.makedirs(self.output_dir, exist_ok=True)
+            path = os.path.join(self.output_dir, self._filename(message))
+            with open(path, "w") as f:
+                f.write(message)
+            log(f"  ✅ Markdown: {path}")
+            return True
+        except Exception as e:
+            log(f"  ❌ Markdown write failed: {e}")
+            return False
+
+
+# ── github ────────────────────────────────────────────────────
+
+class GitHubDelivery(MarkdownDelivery):
+    """Writes a .md file into a local git repo clone and pushes to GitHub."""
+
+    def __init__(self, repo_path, md_dir, branch):
+        self.repo_path = repo_path
+        self.branch    = branch
+        super().__init__(os.path.join(repo_path, md_dir))
+
+    def _git(self, *args):
+        result = subprocess.run(
+            ["git", "-C", self.repo_path] + list(args),
+            capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip())
+        return result.stdout.strip()
+
+    def send(self, message):
+        if not super().send(message):
+            return False
+        filename = self._filename(message)
+        rel_path = os.path.join(os.path.relpath(self.output_dir, self.repo_path), filename)
+        meta     = parse_frontmatter(message)
+        title    = meta.get("title", filename)
+        try:
+            self._git("add", rel_path)
+            self._git("commit", "-m", f"briefing: {title}")
+            self._git("push", "origin", self.branch)
+            log(f"  ✅ GitHub: pushed {rel_path} → {self.branch}")
+            return True
+        except RuntimeError as e:
+            log(f"  ❌ GitHub push failed: {e}")
+            return False
+
+
 # ── registry ─────────────────────────────────────────────────
 
 def _make_telegram(name):
@@ -109,9 +176,27 @@ def _make_telegram(name):
     return TelegramDelivery(token=token, chat_id=chat_id)
 
 
+def _make_markdown():
+    output_dir = os.environ.get("MARKDOWN_OUTPUT_DIR", "output/markdown")
+    return MarkdownDelivery(output_dir)
+
+
+def _make_github():
+    repo_path = os.environ.get("GITHUB_REPO_PATH", "")
+    md_dir    = os.environ.get("GITHUB_MD_DIR", "src/content/briefings")
+    branch    = os.environ.get("GITHUB_BRANCH", "main")
+    if not repo_path:
+        log("❌ GITHUB_REPO_PATH not set in .env")
+        sys.exit(1)
+    if not os.path.isdir(os.path.join(repo_path, ".git")):
+        log(f"❌ GITHUB_REPO_PATH '{repo_path}' is not a git repository")
+        sys.exit(1)
+    return GitHubDelivery(repo_path=repo_path, md_dir=md_dir, branch=branch)
+
+
 def make_delivery(dest, dry_run, cfg=None):
     """Build a Delivery for a dest string (comma-separated names).
-    Supports 'console', 'telegram', and 'telegram_<name>' for named bots.
+    Supports: 'console', 'telegram', 'telegram_<name>', 'markdown', 'github'.
     """
     if dry_run:
         return ConsoleDelivery()
@@ -123,8 +208,12 @@ def make_delivery(dest, dry_run, cfg=None):
             deliveries.append(ConsoleDelivery())
         elif name == "telegram" or name.startswith("telegram_"):
             deliveries.append(_make_telegram(name))
+        elif name == "markdown":
+            deliveries.append(_make_markdown())
+        elif name == "github":
+            deliveries.append(_make_github())
         else:
-            log(f"❌ Unknown delivery destination: '{name}'. Use 'telegram', 'telegram_<name>', or 'console'.")
+            log(f"❌ Unknown delivery destination: '{name}'. Use 'telegram', 'telegram_<name>', 'markdown', 'github', or 'console'.")
             sys.exit(1)
 
     return deliveries[0] if len(deliveries) == 1 else MultiDelivery(deliveries)

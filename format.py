@@ -1,6 +1,10 @@
+import re
 from datetime import datetime
 
 from config import OLLAMA_MODEL
+
+# Destinations that receive markdown-formatted content instead of HTML
+MARKDOWN_DESTS = {"markdown", "github"}
 
 
 def _unicode_bold(text):
@@ -92,6 +96,36 @@ def split_thread(content, output_cfg, cfg):
         first_chunks = _split_to_limit(posts[0], first_limit)
         posts = [bold_title + first_chunks[0]] + first_chunks[1:] + posts[1:]
     return posts
+
+
+def parse_frontmatter(text):
+    """Extract key/value pairs from a YAML frontmatter block."""
+    m = re.match(r'^---\n(.*?)\n---', text, re.DOTALL)
+    if not m:
+        return {}
+    result = {}
+    for line in m.group(1).splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            result[k.strip()] = v.strip().strip('"')
+    return result
+
+
+def build_markdown_message(content, output_cfg, cfg):
+    """Format a generated output as Markdown with Astro-compatible frontmatter."""
+    now   = datetime.now()
+    title = cfg.get("briefing_title", cfg.get("ai_topic", cfg["title"]))
+    topic = cfg.get("_topic", "briefing")
+    return (
+        f"---\n"
+        f'title: "{title}"\n'
+        f"date: {now.strftime('%Y-%m-%d')}\n"
+        f'time: "{now.strftime("%H:%M")}"\n'
+        f"topic: {topic}\n"
+        f'model: "{OLLAMA_MODEL}"\n'
+        f"---\n\n"
+        f"{content}\n"
+    )
 
 
 def build_output_message(content, output_cfg, cfg):
