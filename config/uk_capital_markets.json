@@ -20,7 +20,7 @@
     }
   },
   "outputs": [
-    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram"},
+    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram,github"},
     {"type": "thread",    "name": "X Thread",      "max_chars_per_post": 280, "numbered": true, "tweet_lookback_hours": 6, "dest": "telegram"}
   ],
   "searches": [
