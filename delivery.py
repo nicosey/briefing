@@ -168,6 +168,7 @@ class GitHubDelivery(MarkdownDelivery):
                     log(f"  ℹ GitHub: no changes to commit for {rel_path}")
                     return True
                 raise
+            self._git("pull", "--rebase", "origin", self.branch)
             self._git("push", "origin", self.branch)
             log(f"  ✅ GitHub: pushed {rel_path} → {self.branch}")
             return True
