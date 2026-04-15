@@ -214,6 +214,23 @@ def _generate_thread_from_paragraphs(output_cfg, source_content, cfg):
     return "\n---\n".join(posts)
 
 
+def generate_title(narrative, cfg):
+    """Ask the AI to generate a short headline title based on today's narrative."""
+    prompt = (
+        f"/no_think\nYou are {cfg['ai_persona']}.\n"
+        f"Based on the briefing below, write a short punchy headline title (5-8 words) "
+        f"that captures today's defining story or theme. "
+        f"Output only the title — no quotes, no punctuation at the end.\n\n"
+        f"BRIEFING:\n{narrative}\n\nTitle:"
+    )
+    title = _ollama_call(prompt, max_tokens=30)
+    if title:
+        # Strip any surrounding quotes the model might add
+        title = title.strip().strip('"').strip("'")
+        log(f"  ✅ Generated title: {title}")
+    return title
+
+
 def generate_output(output_cfg, results_data, cfg, previous_narratives=None, source_content=None):
     output_type = output_cfg.get("type", "narrative")
 

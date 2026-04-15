@@ -14,7 +14,7 @@ from db        import (init_db, save_run, save_output, add_to_outbox,
                        find_recent_runs, find_recent_tweets, mark_aggregated,
                        get_collections, get_last_run_timestamp)
 from search    import fetch_all_results, mock_fetch_results
-from ai        import generate_output, mock_output
+from ai        import generate_output, generate_title, mock_output
 from format    import (build_raw_briefing, build_output_message, build_markdown_message,
                        split_thread, MARKDOWN_DESTS)
 
@@ -33,7 +33,7 @@ def persist_results(timestamp, topic, raw_briefing, generated_outputs, outputs_c
         output_id = save_output(timestamp, output_type, name, content)
         if save_only:
             continue
-        out_dest  = output_cfg.get("dest", default_dest)
+        out_dest  = cfg.get("_dest_override") or output_cfg.get("dest", default_dest)
         dests = [d.strip() for d in out_dest.split(",") if d.strip()]
         if output_type == "thread":
             posts = split_thread(content, output_cfg, cfg)
@@ -108,12 +108,14 @@ def main():
     cfg   = load_topic_config(topic)
     cfg["_topic"] = topic
 
-    # Apply briefing type overrides (title + AI instruction)
+    # Apply briefing type overrides (title, AI instruction, dest, generate_title)
     if briefing_type:
         bt = cfg.get("briefing_types", {}).get(briefing_type)
         if bt:
             cfg["briefing_title"]       = bt.get("title", cfg["ai_topic"])
             cfg["briefing_instruction"] = bt.get("ai_instruction", "")
+            cfg["_dest_override"]       = bt.get("dest_override")
+            cfg["_generate_title"]      = bt.get("generate_title", False)
         else:
             log(f"⚠ Unknown briefing type '{briefing_type}' — using defaults")
 
@@ -237,7 +239,13 @@ def main():
 
         if content:
             generated_outputs[output_type] = content
-            out_dest = output_cfg.get("dest", default_dest)
+            # Generate dynamic title from narrative if requested
+            if output_type == "narrative" and cfg.get("_generate_title") and ollama_available and not mock:
+                log("🏷  Generating title...")
+                title = generate_title(content, cfg)
+                if title:
+                    cfg["briefing_title"] = title
+            out_dest = cfg.get("_dest_override") or output_cfg.get("dest", default_dest)
             log(f"  ✅ {name} ({len(content)} chars) → {'saved (no delivery)' if save_only else f'queued for {out_dest}'}")
         else:
             log(f"  ⚠ Skipping {name}")
