@@ -6,7 +6,7 @@
   "ai_topic": "Today's Robot News",
   "lookback_minutes": 120,
   "outputs": [
-    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram_robotics_jn,github"},
+    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram_robotics_jn"},
     {"type": "thread",    "name": "X Thread",      "max_chars_per_post": 280, "numbered": true, "dest": "telegram_robotics_jn"}
   ],
   "searches": [
