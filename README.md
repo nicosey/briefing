@@ -154,17 +154,51 @@ python3 session.py robotics --interval 1 --count 2 --mock --dry-run
 | `console` | Print to terminal |
 | `telegram` | Send via the default bot (`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`) |
 | `telegram_<name>` | Send via a named bot — reads `TELEGRAM_BOT_TOKEN_<NAME>` and `TELEGRAM_CHAT_ID_<NAME>` from `.env` |
+| `markdown` | Write a `.md` file to `MARKDOWN_OUTPUT_DIR` (default: `output/markdown/`) |
+| `github` | Write a `.md` file and `git push` to the Astro repo at `GITHUB_REPO_PATH` |
 
-Set `BRIEFING_DEST` in `.env` as the default, or set `dest` per output in the topic config:
+Set `BRIEFING_DEST` in `.env` as the default, or set `dest` per output in the topic config. Multiple destinations can be comma-separated:
 
 ```json
 "outputs": [
-  {"type": "narrative", "name": "Daily Digest",  "dest": "telegram"},
-  {"type": "thread",    "name": "X Thread",       "dest": "telegram_robotics_jn"}
+  {"type": "narrative", "name": "Daily Digest", "dest": "telegram,github"},
+  {"type": "thread",    "name": "X Thread",     "dest": "telegram_robotics_jn"}
 ]
 ```
 
-To add a new bot, create the bot via `@BotFather`, add the token and chat ID to `.env` as `TELEGRAM_BOT_TOKEN_<NAME>` and `TELEGRAM_CHAT_ID_<NAME>`, then use `"dest": "telegram_<name>"` in the config. No code changes needed.
+### Markdown / GitHub publishing
+
+Outputs sent to `markdown` or `github` are formatted as Markdown with Astro-compatible frontmatter:
+
+```markdown
+---
+title: "Morning Start"
+date: 2026-04-08
+time: "07:00"
+topic: uk_capital_markets
+model: qwen3-coder:30b
+---
+
+Narrative content here...
+```
+
+Files are named `{date}T{time}-{topic}.md` and written to `GITHUB_MD_DIR` inside the repo (default: `src/content/briefings`). After writing, `GitHubDelivery` runs `git add / commit / push` — Netlify (or any CI) picks up the push and deploys automatically.
+
+**Setup:**
+
+1. Clone your Astro repo to the Mac Mini
+2. Ensure git credentials are configured (SSH key or HTTPS token)
+3. Set in `.env`:
+
+   ```ini
+   GITHUB_REPO_PATH=/path/to/your/astro-site
+   GITHUB_MD_DIR=src/content/briefings
+   GITHUB_BRANCH=main
+   ```
+
+4. Test the connection: `python3 test_github.py`
+
+To add a new Telegram bot: create via `@BotFather`, add `TELEGRAM_BOT_TOKEN_<NAME>` and `TELEGRAM_CHAT_ID_<NAME>` to `.env`, use `"dest": "telegram_<name>"` in config. No code changes needed.
 
 ## Output types
 
