@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime
 
-from config import DB_PATH, log
+from config import DB_PATH, ARCHIVE_DB_PATH, log
 
 
 DB_TIMEOUT = 30  # seconds to wait before raising "locked" error
@@ -11,6 +11,45 @@ DB_TIMEOUT = 30  # seconds to wait before raising "locked" error
 
 def _connect():
     return sqlite3.connect(DB_PATH, timeout=DB_TIMEOUT)
+
+
+def _connect_archive():
+    return sqlite3.connect(ARCHIVE_DB_PATH, timeout=DB_TIMEOUT)
+
+
+def init_archive_db():
+    os.makedirs(os.path.dirname(ARCHIVE_DB_PATH) or ".", exist_ok=True)
+    def _():
+        con = _connect_archive()
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS collections (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                topic     TEXT NOT NULL,
+                results   TEXT NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS runs (
+                timestamp       TEXT PRIMARY KEY,
+                topic           TEXT NOT NULL,
+                raw_briefing    TEXT,
+                aggregated_from TEXT DEFAULT '[]',
+                aggregated      INTEGER DEFAULT 0
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS outputs (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_timestamp TEXT NOT NULL,
+                output_type   TEXT NOT NULL,
+                name          TEXT NOT NULL,
+                content       TEXT
+            )
+        """)
+        con.commit()
+        con.close()
+    _db_op(_)
 
 
 def _db_op(fn):
@@ -293,6 +332,41 @@ def get_last_run_timestamp(topic):
         con.close()
         return row[0] if row else None
     return _db_op(_)
+
+
+def archive_collections(max_age_hours=48):
+    """Copy collections older than max_age_hours to archive.db, then delete from live DB."""
+    def _():
+        live = _connect()
+        rows = live.execute(
+            "SELECT id, timestamp, topic, results FROM collections "
+            "WHERE timestamp < datetime('now', ?)",
+            (f"-{max_age_hours} hours",)
+        ).fetchall()
+        live.close()
+
+        if not rows:
+            return
+
+        init_archive_db()
+        arc = _connect_archive()
+        arc.executemany(
+            "INSERT OR IGNORE INTO collections (id, timestamp, topic, results) VALUES (?, ?, ?, ?)",
+            rows
+        )
+        arc.commit()
+        arc.close()
+
+        live = _connect()
+        cur = live.execute(
+            "DELETE FROM collections WHERE timestamp < datetime('now', ?)",
+            (f"-{max_age_hours} hours",)
+        )
+        count = cur.rowcount
+        live.commit()
+        live.close()
+        log(f"  🗄  DB: archived {count} collection(s) older than {max_age_hours}h → archive.db")
+    _db_op(_)
 
 
 def cleanup_collections(max_age_hours=48):

@@ -12,7 +12,7 @@ import urllib.request
 ssl._create_default_https_context = ssl._create_unverified_context
 
 from config import SEARXNG_URL, log, load_topic_config
-from db import init_db, save_collection, cleanup_collections
+from db import init_db, save_collection, archive_collections
 from search import fetch_all_results, mock_fetch_results
 
 
@@ -52,7 +52,7 @@ def main():
 
     init_db()
     save_collection(topic, results)
-    cleanup_collections(max_age_hours=48)
+    archive_collections(max_age_hours=48)
 
     log("")
     log("Done!")
