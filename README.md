@@ -71,6 +71,10 @@ TELEGRAM_CHAT_ID_ROBOTICS_JN=your_robotics_chat_id
 
 # Default outbox destination for outputs without an explicit dest (default: console)
 BRIEFING_DEST=telegram
+
+# DB paths (optional — defaults shown)
+BRIEFING_DB=output/briefings.db
+BRIEFING_ARCHIVE_DB=output/archive.db
 ```
 
 ## Usage
@@ -182,7 +186,7 @@ model: qwen3-coder:30b
 Narrative content here...
 ```
 
-Files are named `{date}T{time}-{topic}.md` and written to `GITHUB_MD_DIR` inside the repo (default: `src/content/briefings`). After writing, `GitHubDelivery` runs `git add / commit / push` — Netlify (or any CI) picks up the push and deploys automatically.
+Files are named `{date}T{time}-{topic}.md` and written to `GITHUB_MD_DIR` inside the repo (default: `src/content/briefings`). After writing, `GitHubDelivery` runs `git add / commit / pull --rebase / push` — Netlify (or any CI) picks up the push and deploys automatically. GitHub publishing is skipped automatically on weekends (Saturday and Sunday).
 
 **Setup:**
 
@@ -280,7 +284,7 @@ Results are stored in `output/briefings.db` (SQLite — no server required):
 
 | Table | Contents |
 | --- | --- |
-| `collections` | Raw search results saved by collect.py — one row per hourly run per topic. Cleaned up after 48 hours. |
+| `collections` | Raw search results saved by collect.py — one row per hourly run per topic. Archived to `archive.db` after 48 hours. |
 | `runs` | One row per briefing run: topic, timestamp, raw headlines, aggregation state |
 | `outputs` | One row per AI output per run: type, name, content — kept permanently |
 | `outbox` | Delivery queue: one row per output×destination. Undelivered entries are retried on every publish run. Published entries older than 24 hours are cleaned up automatically. |
@@ -363,7 +367,8 @@ tail -f ~/projects/briefing/output/LABEL.log
 
 ```text
 output/
-  briefings.db                          # SQLite — all collections, runs, outputs, and outbox
+  briefings.db                          # SQLite — live DB: collections (48h), runs, outputs, outbox
+  archive.db                            # SQLite — collections older than 48h, kept permanently
   2026-03-29_07-00-00_uk_capital_markets/
     raw_briefing.txt                    # formatted headlines (HTML)
     narrative.txt                       # AI narrative output
