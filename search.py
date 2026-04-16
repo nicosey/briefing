@@ -41,9 +41,10 @@ def fetch_all_results(searches):
             "emoji":   s["emoji"],
             "results": [
                 {
-                    "title":   r.get("title", "").strip(),
-                    "url":     r.get("url", ""),
-                    "snippet": r.get("content", "").strip()[:200]
+                    "title":     r.get("title", "").strip(),
+                    "url":       r.get("url", ""),
+                    "snippet":   r.get("content", "").strip()[:200],
+                    "published": r.get("publishedDate", "")
                 }
                 for r in results
             ]
