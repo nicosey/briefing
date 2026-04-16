@@ -141,7 +141,9 @@ class GitHubDelivery(MarkdownDelivery):
             capture_output=True, text=True
         )
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip())
+            msg = (result.stderr.strip() or result.stdout.strip() or
+                   f"git {' '.join(args)} exited with code {result.returncode}")
+            raise RuntimeError(msg)
         return result.stdout.strip()
 
     def send(self, message):
