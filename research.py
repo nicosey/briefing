@@ -137,8 +137,7 @@ def _analyse(articles, persona=None):
         pub = f" (published: {a['published']})" if a.get("published") else ""
         articles_text += f"\n[{i}] {a['title']}{pub}\n{a['url']}\n{a['snippet']}\n"
 
-    prompt = f"""/no_think
-You are {persona}.
+    prompt = f"""You are {persona}.
 Analyse the articles below and provide a concise research summary.
 
 Rules:

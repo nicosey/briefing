@@ -37,8 +37,7 @@ def _narrative_prompt(output_cfg, results_data, cfg, previous_narratives):
     if briefing_instruction:
         briefing_instruction = f"- {briefing_instruction}\n"
 
-    return f"""/no_think
-You are {cfg['ai_persona']}.
+    return f"""You are {cfg['ai_persona']}.
 Based on today's news below, write a concise, engaging narrative summary called "{cfg['ai_topic']}".
 
 Rules:
@@ -76,8 +75,7 @@ def _thread_prompt(output_cfg, results_data, cfg, previous_tweets=None, source_c
         input_block = f"LATEST NEWS:\n{_results_text(feed)}"
         task = "Write an X (Twitter) thread covering the most important current stories"
 
-    return f"""/no_think
-You are {cfg['ai_persona']}.
+    return f"""You are {cfg['ai_persona']}.
 {task} of exactly {num_posts} posts.
 
 Rules:
@@ -108,8 +106,7 @@ def _tweet_prompt(output_cfg, results_data, cfg, previous_tweets=None):
             recent_block += f"- {t}\n"
         recent_block += "\n"
 
-    return f"""/no_think
-You are {cfg['ai_persona']}.
+    return f"""You are {cfg['ai_persona']}.
 Based on the latest news below, write a single tweet-sized update about the most breaking or recent story.
 
 Rules:
@@ -217,7 +214,7 @@ def _generate_thread_from_paragraphs(output_cfg, source_content, cfg):
 def generate_title(narrative, cfg):
     """Ask the AI to generate a short headline title based on today's narrative."""
     prompt = (
-        f"/no_think\nYou are {cfg['ai_persona']}.\n"
+        f"You are {cfg['ai_persona']}.\n"
         f"Based on the briefing below, write a short punchy headline title (5-8 words) "
         f"that captures today's defining story or theme. "
         f"Output only the title — no quotes, no punctuation at the end.\n\n"
