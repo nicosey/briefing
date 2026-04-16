@@ -141,6 +141,7 @@ def _ollama_call(prompt, max_tokens=500):
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "think": False,
         "options": {"temperature": 0.2, "num_predict": max_tokens}
     }).encode("utf-8")
     try:
@@ -248,6 +249,7 @@ def generate_output(output_cfg, results_data, cfg, previous_narratives=None, sou
         "model": OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
+        "think": False,
         "options": {"temperature": 0.3, "num_predict": 4000}
     }).encode("utf-8")
 

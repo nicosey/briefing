@@ -158,6 +158,7 @@ Research summary:"""
         "model":   OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream":  False,
+        "think":   False,
         "options": {"temperature": 0.2, "num_predict": 2000}
     }).encode("utf-8")
     try:
