@@ -94,6 +94,9 @@ python3 publish.py
 
 # Live session: collect + brief at intervals, then aggregate and publish
 python3 session.py <topic> [options]
+
+# Research: query archive/DB or run live searches, optionally analyse with Ollama
+python3 research.py [options]
 ```
 
 ### collect.py options
@@ -124,6 +127,19 @@ python3 session.py <topic> [options]
 | `--mock` | Fake SearXNG + Ollama — no services needed |
 | `--dry-run` | Skip DB writes and delivery |
 
+### research.py options
+
+| Option | Description |
+| --- | --- |
+| `--topic <name>` | Query archived and live DB collections for this topic |
+| `--keyword <word>` | Filter articles by keyword in title or snippet |
+| `--from <date>` | Start date for DB query (e.g. `2026-04-01`) |
+| `--to <date>` | End date for DB query |
+| `--live "<query>"` | Run a live SearXNG search (repeatable) |
+| `--count N` | Results per live search query (default: 5) |
+| `--analyse` | Send results to Ollama for a research summary |
+| `--save` | Save live search results to `archive.db` |
+
 ### Examples
 
 ```bash
@@ -147,6 +163,15 @@ python3 session.py uk_capital_markets --duration 120 --interval 30 --briefing-ty
 
 # Test the session loop with no services
 python3 session.py robotics --interval 1 --count 2 --mock --dry-run
+
+# Research: query archive for a keyword since a date
+python3 research.py --topic uk_capital_markets --keyword "Barclays" --from 2026-04-01
+
+# Research: live search with Ollama analysis
+python3 research.py --live "UK gilts today" --live "Bank of England rates" --analyse
+
+# Research: combined archive + live + analysis, save live results to archive
+python3 research.py --topic uk_capital_markets --keyword "gilts" --live "UK gilts today" --analyse --save
 ```
 
 **Available topics:** `robotics`, `uk_capital_markets`, `data_centres`, `bjj`
