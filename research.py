@@ -86,13 +86,13 @@ def _extract_articles(rows, keyword=None):
     return articles
 
 
-def _articles_from_live(queries, count=5):
+def _articles_from_live(queries, count=5, time_range="day"):
     """Run live SearXNG searches and return articles."""
     articles = []
     seen_urls = set()
     for query in queries:
         log(f"  🔍 Live: {query}")
-        results = search_searxng(query, count=count, category="news", time_range="day")
+        results = search_searxng(query, count=count, category="news", time_range=time_range)
         for r in results:
             url = r.get("url", "")
             if url in seen_urls:
@@ -189,20 +189,22 @@ def main():
     keyword = None
     from_dt = None
     to_dt   = None
-    lives   = []
-    analyse = "--analyse" in raw_args
-    save    = "--save"    in raw_args
-    count   = 5
+    lives      = []
+    analyse    = "--analyse" in raw_args
+    save       = "--save"    in raw_args
+    count      = 5
+    time_range = "day"
 
     i = 0
     while i < len(raw_args):
         a = raw_args[i]
-        if a == "--topic"   and i + 1 < len(raw_args): topic   = raw_args[i+1]; i += 2; continue
-        if a == "--keyword" and i + 1 < len(raw_args): keyword = raw_args[i+1]; i += 2; continue
-        if a == "--from"    and i + 1 < len(raw_args): from_dt = raw_args[i+1]; i += 2; continue
-        if a == "--to"      and i + 1 < len(raw_args): to_dt   = raw_args[i+1]; i += 2; continue
-        if a == "--live"    and i + 1 < len(raw_args): lives.append(raw_args[i+1]); i += 2; continue
-        if a == "--count"   and i + 1 < len(raw_args):
+        if a == "--topic"      and i + 1 < len(raw_args): topic      = raw_args[i+1]; i += 2; continue
+        if a == "--keyword"    and i + 1 < len(raw_args): keyword    = raw_args[i+1]; i += 2; continue
+        if a == "--from"       and i + 1 < len(raw_args): from_dt    = raw_args[i+1]; i += 2; continue
+        if a == "--to"         and i + 1 < len(raw_args): to_dt      = raw_args[i+1]; i += 2; continue
+        if a == "--live"       and i + 1 < len(raw_args): lives.append(raw_args[i+1]); i += 2; continue
+        if a == "--time-range" and i + 1 < len(raw_args): time_range = raw_args[i+1]; i += 2; continue
+        if a == "--count"      and i + 1 < len(raw_args):
             try: count = int(raw_args[i+1])
             except ValueError: pass
             i += 2; continue
@@ -233,8 +235,8 @@ def main():
 
     # Live search
     if lives:
-        log(f"\n📡 Running {len(lives)} live search(es)...")
-        live_articles = _articles_from_live(lives, count=count)
+        log(f"\n📡 Running {len(lives)} live search(es) [{time_range}]...")
+        live_articles = _articles_from_live(lives, count=count, time_range=time_range)
         log(f"  ✅ {len(live_articles)} article(s) from live search")
         articles.extend(live_articles)
 

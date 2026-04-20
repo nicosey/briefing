@@ -138,6 +138,7 @@ python3 research.py [options]
 | `--live "<query>"` | Run a live SearXNG search (repeatable) |
 | `--count N` | Results per live search query (default: 5) |
 | `--analyse` | Send results to Ollama for a research summary |
+| `--time-range <range>` | Time window for live searches: `day` (default), `week`, `month`, `year` |
 | `--save` | Save live search results to `archive.db` |
 
 ### Examples
