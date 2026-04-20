@@ -334,6 +334,156 @@ class TestMockOutput(unittest.TestCase):
         self.assertIn("Para two", result)
 
 
+# ── research tests ───────────────────────────────────────────
+
+class TestExtractArticles(unittest.TestCase):
+
+    def _rows(self, articles):
+        results = json.dumps([{"section": "TEST", "emoji": "🔹", "results": articles}])
+        return [("2026-04-16T10:00:00", "uk_capital_markets", results)]
+
+    def test_returns_all_articles_without_filter(self):
+        from research import _extract_articles
+        rows = self._rows([
+            {"title": "Barclays rises", "url": "https://a.com/1", "snippet": "Up 2%", "published": ""},
+            {"title": "HSBC falls",     "url": "https://a.com/2", "snippet": "Down 1%", "published": ""},
+        ])
+        articles = _extract_articles(rows)
+        self.assertEqual(len(articles), 2)
+
+    def test_keyword_filter_matches_title(self):
+        from research import _extract_articles
+        rows = self._rows([
+            {"title": "Barclays Q1 results", "url": "https://a.com/1", "snippet": "Strong quarter", "published": ""},
+            {"title": "HSBC outlook",        "url": "https://a.com/2", "snippet": "Cautious tone",  "published": ""},
+        ])
+        articles = _extract_articles(rows, keyword="barclays")
+        self.assertEqual(len(articles), 1)
+        self.assertIn("Barclays", articles[0]["title"])
+
+    def test_keyword_filter_matches_snippet(self):
+        from research import _extract_articles
+        rows = self._rows([
+            {"title": "UK Banks Update", "url": "https://a.com/1", "snippet": "Barclays leads gains", "published": ""},
+            {"title": "Gilt Yields",     "url": "https://a.com/2", "snippet": "BoE holds rates",      "published": ""},
+        ])
+        articles = _extract_articles(rows, keyword="barclays")
+        self.assertEqual(len(articles), 1)
+
+    def test_keyword_filter_is_case_insensitive(self):
+        from research import _extract_articles
+        rows = self._rows([
+            {"title": "BARCLAYS UPDATE", "url": "https://a.com/1", "snippet": "", "published": ""},
+        ])
+        self.assertEqual(len(_extract_articles(rows, keyword="barclays")), 1)
+        self.assertEqual(len(_extract_articles(rows, keyword="Barclays")), 1)
+
+    def test_deduplicates_by_url(self):
+        from research import _extract_articles
+        article = {"title": "Same article", "url": "https://a.com/1", "snippet": "", "published": ""}
+        rows = self._rows([article, article])
+        articles = _extract_articles(rows)
+        self.assertEqual(len(articles), 1)
+
+    def test_article_has_expected_keys(self):
+        from research import _extract_articles
+        rows = self._rows([{"title": "Test", "url": "https://a.com/1", "snippet": "snip", "published": "2026-04-16"}])
+        a = _extract_articles(rows)[0]
+        for key in ("collected", "topic", "section", "title", "url", "snippet", "published"):
+            self.assertIn(key, a)
+
+    def test_empty_rows_returns_empty(self):
+        from research import _extract_articles
+        self.assertEqual(_extract_articles([]), [])
+
+
+class TestQueryDb(unittest.TestCase):
+
+    def test_returns_empty_for_missing_db(self):
+        from research import _query_db
+        result = _query_db("/nonexistent/path/db.db", "topic", None, None)
+        self.assertEqual(result, [])
+
+    def test_queries_by_topic(self):
+        import sqlite3
+        from research import _query_db
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            con = sqlite3.connect(db_path)
+            con.execute("CREATE TABLE collections (id INTEGER PRIMARY KEY, timestamp TEXT, topic TEXT, results TEXT)")
+            con.execute("INSERT INTO collections VALUES (1, '2026-04-16T10:00:00', 'robotics', '[]')")
+            con.execute("INSERT INTO collections VALUES (2, '2026-04-16T11:00:00', 'uk_capital_markets', '[]')")
+            con.commit()
+            con.close()
+            rows = _query_db(db_path, "robotics", None, None)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0][1], "robotics")
+        finally:
+            os.unlink(db_path)
+
+    def test_filters_by_date_range(self):
+        import sqlite3
+        from research import _query_db
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            con = sqlite3.connect(db_path)
+            con.execute("CREATE TABLE collections (id INTEGER PRIMARY KEY, timestamp TEXT, topic TEXT, results TEXT)")
+            con.execute("INSERT INTO collections VALUES (1, '2026-04-01T10:00:00', 'test', '[]')")
+            con.execute("INSERT INTO collections VALUES (2, '2026-04-15T10:00:00', 'test', '[]')")
+            con.commit()
+            con.close()
+            rows = _query_db(db_path, "test", "2026-04-10", None)
+            self.assertEqual(len(rows), 1)
+            self.assertIn("2026-04-15", rows[0][0])
+        finally:
+            os.unlink(db_path)
+
+
+class TestArticlesFromLive(unittest.TestCase):
+
+    def _mock_results(self):
+        return [
+            {"title": "Live Article", "url": "https://live.com/1",
+             "content": "Some snippet", "publishedDate": "2026-04-16"}
+        ]
+
+    def test_calls_searxng_with_correct_time_range(self):
+        from research import _articles_from_live
+        with patch("research.search_searxng", return_value=self._mock_results()) as mock_search:
+            _articles_from_live(["gilts UK"], time_range="week")
+            mock_search.assert_called_once_with("gilts UK", count=5, category="news", time_range="week")
+
+    def test_default_time_range_is_day(self):
+        from research import _articles_from_live
+        with patch("research.search_searxng", return_value=self._mock_results()) as mock_search:
+            _articles_from_live(["gilts UK"])
+            _, kwargs = mock_search.call_args
+            self.assertEqual(kwargs["time_range"], "day")
+
+    def test_returns_articles_with_expected_keys(self):
+        from research import _articles_from_live
+        with patch("research.search_searxng", return_value=self._mock_results()):
+            articles = _articles_from_live(["test query"])
+            self.assertEqual(len(articles), 1)
+            a = articles[0]
+            self.assertEqual(a["title"], "Live Article")
+            self.assertEqual(a["published"], "2026-04-16")
+
+    def test_deduplicates_across_queries(self):
+        from research import _articles_from_live
+        with patch("research.search_searxng", return_value=self._mock_results()):
+            articles = _articles_from_live(["query one", "query two"])
+            self.assertEqual(len(articles), 1)
+
+    def test_empty_results_returns_empty(self):
+        from research import _articles_from_live
+        with patch("research.search_searxng", return_value=[]):
+            articles = _articles_from_live(["nothing"])
+            self.assertEqual(articles, [])
+
+
 # ── github connection test ────────────────────────────────────
 
 class TestGitHubConnection(unittest.TestCase):

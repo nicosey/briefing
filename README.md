@@ -177,6 +177,14 @@ python3 research.py --topic uk_capital_markets --keyword "gilts" --live "UK gilt
 
 **Available topics:** `robotics`, `uk_capital_markets`, `data_centres`, `bjj`
 
+## Tests
+
+```bash
+python3 tests.py
+```
+
+No external services required — all tests use mocks or temp files. Covers format, delivery, search, AI mocks, and research (article extraction, keyword filtering, DB queries, live search time range).
+
 ## Delivery destinations
 
 | Destination | Description |
