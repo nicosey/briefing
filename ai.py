@@ -48,6 +48,7 @@ Rules:
 - Keep it under {max_words} words
 - Write in a professional but accessible tone
 - Do NOT use markdown formatting, just plain text
+- Do NOT refer to "articles", "sources", "reports" or the data you were given — write as if from your own knowledge
 - End with one sentence on what to watch next
 {briefing_instruction}{agg_instruction}
 {history_block}TODAY'S RAW NEWS DATA:
