@@ -273,6 +273,39 @@ class TestMakeDelivery(unittest.TestCase):
 
 # ── search / mock tests ───────────────────────────────────────
 
+class TestSearchPagination(unittest.TestCase):
+
+    def _page(self, n, offset=0):
+        return [{"url": f"https://example.com/{offset+i}", "title": f"Article {offset+i}", "content": "", "publishedDate": ""} for i in range(n)]
+
+    def test_single_page_when_count_within_page_size(self):
+        from search import search_searxng
+        with patch("search._search_page", return_value=self._page(5)) as mock:
+            results = search_searxng("test", count=5)
+            self.assertEqual(mock.call_count, 1)
+            self.assertEqual(len(results), 5)
+
+    def test_paginates_when_count_exceeds_page_size(self):
+        from search import search_searxng
+        pages = [self._page(10, offset=i*10) for i in range(3)]
+        with patch("search._search_page", side_effect=pages):
+            results = search_searxng("test", count=25)
+            self.assertEqual(len(results), 25)
+
+    def test_stops_when_no_new_results(self):
+        from search import search_searxng
+        with patch("search._search_page", return_value=self._page(3)):
+            results = search_searxng("test", count=20)
+            self.assertEqual(len(results), 3)
+
+    def test_deduplicates_across_pages(self):
+        from search import search_searxng
+        same_page = self._page(5)
+        with patch("search._search_page", return_value=same_page):
+            results = search_searxng("test", count=10)
+            self.assertEqual(len(results), 5)
+
+
 class TestMockFetchResults(unittest.TestCase):
 
     def test_returns_one_section_per_search(self):

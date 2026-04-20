@@ -5,30 +5,50 @@ import urllib.parse
 from config import SEARXNG_URL, log
 
 
-def search_searxng(query, count=5, category="news", time_range="day"):
+PAGE_SIZE = 10  # SearXNG returns ~10 results per page
+
+
+def _search_page(query, category, time_range, pageno):
+    """Fetch a single page of SearXNG results."""
     p = {
         "q": query, "format": "json",
         "categories": category, "language": "en",
-        "number_of_results": count
+        "pageno": pageno,
     }
     if time_range:
         p["time_range"] = time_range
     params = urllib.parse.urlencode(p)
+    req = urllib.request.Request(f"{SEARXNG_URL}/search?{params}")
+    req.add_header("User-Agent", "DailyBriefing/1.0")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read().decode())
+        return data.get("results", [])
+
+
+def search_searxng(query, count=5, category="news", time_range="day"):
+    """Search SearXNG, paginating automatically if count > PAGE_SIZE."""
+    seen, unique = set(), []
+    page = 1
     try:
-        req = urllib.request.Request(f"{SEARXNG_URL}/search?{params}")
-        req.add_header("User-Agent", "DailyBriefing/1.0")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
-            seen, unique = set(), []
-            for r in data.get("results", [])[:count]:
+        while len(unique) < count:
+            results = _search_page(query, category, time_range, page)
+            if not results:
+                break
+            new = 0
+            for r in results:
+                if len(unique) >= count:
+                    break
                 u = r.get("url", "")
-                if u not in seen:
+                if u and u not in seen:
                     seen.add(u)
                     unique.append(r)
-            return unique
+                    new += 1
+            if new == 0:
+                break  # no new results on this page — stop
+            page += 1
     except Exception as e:
         log(f"  ⚠ Search error: {e}")
-        return []
+    return unique
 
 
 def fetch_all_results(searches):
