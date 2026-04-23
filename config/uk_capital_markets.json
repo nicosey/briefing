@@ -2,7 +2,7 @@
   "title": "Daily UK Capital Markets Briefing",
   "header_emoji": "🏦",
   "footer_emoji": "🇬🇧",
-  "ai_persona": "a senior UK capital markets analyst writing a daily morning briefing for institutional clients",
+  "ai_persona": "a senior UK capital markets analyst writing a daily morning briefing for institutional clients, with particular focus on technology, AI, defence, semiconductors, and energy sectors",
   "ai_topic": "Today's UK Capital Markets Digest",
   "lookback_minutes": 120,
   "briefing_types": {
@@ -32,6 +32,9 @@
     {"emoji": "🌍", "title": "MACRO & STERLING",               "query": "UK economy GDP inflation sterling pound dollar macro outlook",                              "count": 3, "category": "news"},
     {"emoji": "🏦", "title": "BANKS & ASSET MANAGERS",         "query": "Barclays HSBC Lloyds NatWest Schroders abrdn Legal General capital markets results",      "count": 4, "category": "news"},
     {"emoji": "₿",  "title": "CRYPTO & DIGITAL ASSETS",        "query": "bitcoin cryptocurrency UK FCA digital assets regulation institutional crypto London",      "count": 4, "category": "news"},
-    {"emoji": "⚡", "title": "ENERGY & COMMODITIES",           "query": "UK energy markets oil gas electricity prices North Sea renewables commodities London",       "count": 4, "category": "news"}
+    {"emoji": "⚡", "title": "ENERGY & COMMODITIES",           "query": "UK energy markets oil gas electricity prices North Sea renewables commodities London",       "count": 4, "category": "news"},
+    {"emoji": "🤖", "title": "AI & TECH STOCKS",              "query": "UK listed AI technology stocks London market Sage Darktrace Aveva tech sector capital markets", "count": 4, "category": "news"},
+    {"emoji": "🛡️", "title": "DEFENCE & AEROSPACE",           "query": "BAE Systems Rolls-Royce defence aerospace UK spending contracts London Stock Exchange",        "count": 4, "category": "news"},
+    {"emoji": "💾", "title": "SEMICONDUCTORS & CHIPS",        "query": "ARM Holdings semiconductors chips hardware UK market technology stocks London",                 "count": 4, "category": "news"}
   ]
 }
