@@ -22,7 +22,7 @@
     }
   },
   "outputs": [
-    {"type": "narrative", "name": "Daily Digest",  "max_words": 500,  "dest": "telegram"}
+    {"type": "narrative", "name": "Daily Digest",  "max_words": 800,  "dest": "telegram"}
   ],
   "searches": [
     {"emoji": "📈", "title": "LATEST UK CAPITAL MARKETS NEWS", "query": "UK capital markets FTSE breaking news today",                                              "count": 5, "category": "news"},
